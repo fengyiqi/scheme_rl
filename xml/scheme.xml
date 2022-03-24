@@ -1,0 +1,9 @@
+<scheme>
+    <type>0</type> 
+    <stencil>1</stencil>
+    <q>10</q>
+    <cq>36</cq>
+    <d1>0.6</d1>
+    <d2>0.3</d2>
+    <ct>1e-05</ct>
+</scheme>
