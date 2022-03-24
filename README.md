@@ -1,1 +1,1 @@
-# scheme-rl
+# A environment for reinforcement learning of TENO5 scheme
