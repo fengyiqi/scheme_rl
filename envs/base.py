@@ -130,7 +130,16 @@ class AlpacaEnv(gym.Env, ABC):
     def _reset_from_crashed(self):
         self.counter += 1
         end_time = self.timestep_controller.get_end_time_string(self.counter)
+        state = self._get_restart_state(end_time)
 
+
+    def _get_restart_state(self, end_time) -> np.array:
+        # return the restart file of end time
+        pass
+
+    def _reset_flags_and_buffers(self):
+        # reset flags and buffers, e.g. self.counter, self.is_crashed
+        pass
 
 
     def reset(self, print_info=False, evaluate=False):
@@ -143,7 +152,6 @@ class AlpacaEnv(gym.Env, ABC):
                 result_filename=f"data_{end_time}*.h5"
             )
             self.quality = 0
-            self.action_trajectory = []
             self.runtime_info = ""
             state = []
             for i, layer in enumerate(self.layers):
