@@ -1,6 +1,6 @@
 import numpy as np
 from boiles.objective.simulation2d import Simulation2D
-from .envs.base import AlpacaEnv
+from .envs.env_base import AlpacaEnv
 import matplotlib.pyplot as plt
 
 
