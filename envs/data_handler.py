@@ -1,5 +1,8 @@
+import os.path
+
 import numpy as np
 import matplotlib.pyplot as plt
+from boiles.objective.simulation2d import Simulation2D
 
 
 def normalize(value, bounds):
@@ -16,39 +19,59 @@ class DataHandler:
 class BaselineDataHandler(DataHandler):
     def __init__(
             self,
-            timestep_controler,
+            timestep_size,
+            time_span,
             data_loc,
             layers,
-            objective,
             config: dict = None
     ):
         super(BaselineDataHandler, self).__init__()
 
         if layers is None:
             layers = ["density", "kinetic_energy", "pressure"]
-        self.timestep_controler = timestep_controler
-        self.end_time = self.timestep_controler.get_time_span()
-        self.timestep_size = self.timestep_controler.get_timestep_size()
-        self.data_loc = data_loc
+        self.timestep_size = timestep_size
+        self.end_time = time_span
+        self.state_data_loc = os.path.join(data_loc, "domain")
+        self.restart_data_loc = os.path.join(data_loc, "restart")
         self.layers = layers
-        self.objective = objective
         self.smoothness_threshold = config.get("smoothness_threshold", 0.33)
 
         self.baseline_state = self.get_baseline_state()
         self.bounds = self.get_bounds()
 
-    def get_baseline_state(self) -> dict:
-        timesteps = np.arange(0, self.end_time, self.timestep_size)
-        baseline = {}
-        for end_time in timesteps:
-            state_matrix = []
-            end_time = format(end_time, ".3f")
-            freeshear = self.objective(results_folder=self.data_loc, result_filename=f"data_{end_time}*.h5")
-            for state in self.layers:
-                value = freeshear.result[state]
-                state_matrix.append(value)
-            baseline[end_time] = np.array(state_matrix)
-        return baseline
+    # def get_baseline_state(self) -> dict:
+    #     timesteps = np.arange(0, self.end_time, self.timestep_size)
+    #     baseline = {}
+    #     for end_time in timesteps:
+    #         state_matrix = []
+    #         end_time = format(end_time, ".3f")
+    #         freeshear = self.objective(results_folder=self.state_data_loc, result_filename=f"data_{end_time}*.h5")
+    #         for state in self.layers:
+    #             value = freeshear.result[state]
+    #             state_matrix.append(value)
+    #         baseline[end_time] = np.array(state_matrix)
+    #     return baseline
+
+    def get_baseline_state(self, end_time):
+        data_obj = Simulation2D(file=os.path.join(self.state_data_loc, f"data_{end_time}.h5"))
+        return self.get_states(data_obj=data_obj)
+
+    def get_states(self, data_obj, normalize_states=True):
+        state_matrix = []
+        for state in self.layers:
+            value = data_obj.result[state]
+            state_matrix.append(value)
+        if normalize_states:
+            normalized_states = []
+            for i, state in enumerate(state_matrix):
+                normalized_states.append(
+                    normalize(
+                        value=state,
+                        bounds=self.bounds[self.layers[i]]
+                    )
+                )
+            return normalized_states
+        return state_matrix
 
     def get_bounds(self):
         baseline_data = self.baseline_state

@@ -12,7 +12,7 @@ class ImplosionEnv(AlpacaEnv):
     def __init__(self, config=None):
         executable = "/home/yiqi/PycharmProjects/RL2D/solvers/ALPACA_32_TENO5RL_ETA"
         class_config = dict(
-            baseline_data_loc="/home/yiqi/PycharmProjects/RL2D/baseline/implosion_64/domain",
+            baseline_data_loc="/home/yiqi/PycharmProjects/RL2D/baseline/implosion_64",
             scheme_file="/home/yiqi/PycharmProjects/RL2D/runtime_data/scheme.xml",
             smoothness_threshold=0.33
         )
