@@ -3,10 +3,9 @@ import numpy as np
 import xml.etree.ElementTree as ET
 from boiles.objective.simulation2d import Simulation2D
 from .env_base import q_bound, cq_bound, eta_bound, ct_power_bound, action_bound
-from .data_handler import normalize, BaselineDataHandler
 
 
-
+zero_mean=True
 
 class TimeStepsController:
     def __init__(self, time_span, timestep_size):
@@ -23,7 +22,9 @@ class TimeStepsController:
     def get_end_time_float(self, counter):
         return counter * self._timestep_size
 
-    def get_end_time_string(self, counter):
+    def get_end_time_string(self, counter=None):
+        if counter is None:
+            return format(self.get_end_time_float(self.counter), ".3f")
         return format(self.get_end_time_float(counter), ".3f")
 
     def get_total_steps(self):
@@ -67,7 +68,6 @@ class SchemeParametersWriter:
             root[i].text = str(para)
         tree.write(self.file)
 
-
 class AlpacaExecutor:
     def __init__(self, executable, inputfile, cpu_num):
         self.executable = executable
@@ -77,6 +77,71 @@ class AlpacaExecutor:
     def run_alpaca(self, inputfile):
         os.system(f"cd runtime_data; mpiexec -n {self.cpu_num} {self.executable} inputfiles/{inputfile}")
 
+
+def normalize(value, bounds):
+    normalized = (value - bounds[0]) / (bounds[1] - bounds[0])
+    return normalized
+
+def get_states(data_obj, layers=None, normalize_states=True, zero_mean=zero_mean):
+    if layers is None:
+        layers = ["density", "kinetic_energy", "pressure"]
+    state_matrix = []
+    for state in layers:
+        value = data_obj.result[state]
+        if normalize_states:
+            value = normalize(value=value, bounds=(state.min(), state.max()))
+            value = value - 0.5 if zero_mean else value
+        state_matrix.append(value)
+    return state_matrix
+
+class BaselineDataHandler:
+    def __init__(
+            self,
+            timestep_size,
+            time_span,
+            data_loc,
+            layers,
+            config: dict = None
+    ):
+        super(BaselineDataHandler, self).__init__()
+
+        if layers is None:
+            layers = ["density", "kinetic_energy", "pressure"]
+        self.timestep_size = timestep_size
+        self.end_time = time_span
+        self.state_data_loc = os.path.join(data_loc, "domain")
+        self.restart_data_loc = os.path.join(data_loc, "restart")
+        self.layers = layers
+        self.smoothness_threshold = config.get("smoothness_threshold", 0.33)
+        self.states = self.get_all_states()
+        self.initial_state = self.states["0.000"]
+
+    def get_all_states(self):
+        states = {}
+        for timestep in np.arange(0, self.end_time, self.timestep_size):
+            end_time = format(timestep, ".3f")
+            data_obj = Simulation2D(file=os.path.join(self.state_data_loc, f"data_{end_time}.h5"))
+            states[end_time] = get_states(data_obj=data_obj, layers=self.layers)
+        return states
+
+    # def get_baseline_reward(self, prop):
+    #     timesteps = np.arange(self.timestep_size, self.end_time + self.timestep_size, self.timestep_size)
+    #     baseline = {}
+    #     for end_time in timesteps:
+    #         end_time = format(end_time, ".3f")
+    #         freeshear = self.objective(results_folder=self.data_loc, result_filename=f"data_{end_time}*.h5")
+    #         if prop == "kinetic_energy":
+    #             data = freeshear.result["kinetic_energy"]
+    #             data = data.sum().round(4)
+    #         if prop == "numerical_dissipation_rate":
+    #             _, _, _, data = freeshear.truncation_errors()
+    #             data = round(data, 4)
+    #         if prop == "smoothness_indicator":
+    #             _, data = freeshear.smoothness(threshold=self.smoothness_threshold)
+    #             data = round(data, 4)
+    #
+    #         baseline[end_time] = data
+    #     return baseline
 
 class SimulationHandler:
     def __init__(
@@ -99,7 +164,6 @@ class SimulationHandler:
 
     def configure_inputfile(self, end_time):
         new_file = self.rename_inputfile(end_time)
-        # new_file_path = os.path.join("runtime_data/inputfiles", new_file)
         # starting from initial condition, no restart
         if self.time_controller.counter == 1:
             restore_mode = "Off"
@@ -145,22 +209,14 @@ class SimulationHandler:
         tree.write(file)
         return file
 
-    def get_states(self, end_time):
+    def get_state(self, end_time):
         current_data = Simulation2D(file=f"runtime_data/{self.inputfile}_{end_time}/domain/data_{end_time}0*.h5")
         if not current_data.result_exit:
             self.is_crashed = True
             self.done = True
-            return self.baseline_data_obj.get_initial_state()
+            return self.baseline_data_obj.states["0.000"]
         else:
-            states = []
-            for i, layer in enumerate(self.layers):
-                value = current_data.result[layer]
-                value = normalize(
-                    value=value,
-                    bounds=self.baseline_data_obj.bounds[self.layers[i]],
-                )
-                states.append(value)
-            return np.array(states)
+            return get_states(data_obj=current_data, layers=self.layers)
 
     def rename_inputfile(self, end_time):
         old_file = f"runtime_data/inputfiles/{self.inputfile}_*.xml"
@@ -172,15 +228,6 @@ class SimulationHandler:
     def run(self, inputfile):
         self.solver.run_alpaca(inputfile)
 
-
-
-class GymIOSpaceHandler:
-    def __init__(self, observation_space, action_space):
-        self._observation_space = observation_space
-        self._action_space = action_space
-
-    def get_io_space(self):
-        return self._observation_space, self._action_space
 
 
 class DebugProfileHandler:
