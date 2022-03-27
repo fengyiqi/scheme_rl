@@ -41,13 +41,13 @@ class AlpacaEnv(gym.Env, ABC):
         if layers is None:
             layers = ["density", "kinetic_energy", "pressure"]
         if config is None:
-            config = dict()
+            config = {}
         self.observation_space = observation_space
         self.action_space = action_space
-        self.smoothness_threshold = config.get("smoothness_threshold", 0.33)
         self.done, self.si_improve, self.ke_improve, self.evaluation = False, False, False, False
         self.quality = 0
-        self.linked_reset = config.get("linked_reset", False)
+        self.config = config
+        self.linked_reset = config.get("linked_reset", True)
         self.obj = self._build_objective(
             executable=executable,
             inputfile=inputfile,
@@ -96,7 +96,8 @@ class AlpacaEnv(gym.Env, ABC):
             time_controller=timestep_controller,
             baseline_data_obj=baseline_data_obj,
             scheme_writer=schemefile,
-            linked_reset=True
+            linked_reset=True,
+            config=config
         )
         return objective
 
@@ -129,6 +130,7 @@ class AlpacaEnv(gym.Env, ABC):
         return False not in conditions
 
     def reset(self, print_info=False, evaluate=False):
+        self.evaluation = evaluate
         if self._if_reset_from_crashed():
             self.obj.time_controller.counter += 0
             end_time = self.obj.time_controller.get_end_time_string()
@@ -136,9 +138,6 @@ class AlpacaEnv(gym.Env, ABC):
             self._reset_flags_and_buffers()
             return np.array(states)
         self._reset_flags_and_buffers()
-        if evaluate:
-            self.debug.collect_scheme_paras()
-            self.debug.flush_info()
         return self.obj.baseline_data_obj.initial_state
 
     def step(self, action: list):
@@ -154,6 +153,9 @@ class AlpacaEnv(gym.Env, ABC):
 
         if end_time == self.obj.time_controller.get_time_span_string():
             self.done = True
+        if self.evaluation:
+            self.debug.collect_scheme_paras()
+            self.debug.flush_info()
         return current_state, reward, self.done, {}
 
     @abstractmethod
@@ -171,7 +173,7 @@ class AlpacaEnv(gym.Env, ABC):
                 f"Timestep size: {self.obj.time_controller.get_timestep_size()}\n"
         info += f"\tParameters: q {q_bound}; Cq {cq_bound}; Eta {eta_bound}; Ct(power) {ct_power_bound}\n"
         info += f"\tLayers: {self.obj.layers}\n"
-        info += f"\tSmoothness: {self.smoothness_threshold}\n"
+        info += f"\tSmoothness: {self.obj.smoothness_threshold}\n"
         info += f"\tBaseline data: {self.obj.baseline_data_obj.state_data_loc}\n"
         info += "\n"
         info += f"\tExecutable: {self.obj.solver.executable}\n"

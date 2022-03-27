@@ -115,6 +115,9 @@ class BaselineDataHandler:
         self.smoothness_threshold = config.get("smoothness_threshold", 0.33)
         self.states = self.get_all_states()
         self.initial_state = self.states["0.000"]
+        self.smoothness = self.get_all_baseline_smoothness_reward()
+        self.truncation = self.get_all_baseline_truncation_reward()
+        self.kinetic = self.get_all_baseline_ke_reward()
 
     def get_all_states(self):
         states = {}
@@ -123,6 +126,30 @@ class BaselineDataHandler:
             data_obj = Simulation2D(file=os.path.join(self.state_data_loc, f"data_{end_time}.h5"))
             states[end_time] = get_states(data_obj=data_obj, layers=self.layers)
         return states
+
+    def get_all_baseline_smoothness_reward(self):
+        rewards = {}
+        for timestep in np.arange(0, self.end_time + 1e-6, self.timestep_size):
+            end_time = format(timestep, ".3f")
+            data_obj = Simulation2D(file=os.path.join(self.state_data_loc, f"data_{end_time}.h5"))
+            _, rewards[end_time] = data_obj.smoothness(threshold=self.smoothness_threshold)
+        return rewards
+
+    def get_all_baseline_truncation_reward(self):
+        rewards = {}
+        for timestep in np.arange(0, self.end_time + 1e-6, self.timestep_size):
+            end_time = format(timestep, ".3f")
+            data_obj = Simulation2D(file=os.path.join(self.state_data_loc, f"data_{end_time}.h5"))
+            _, _, _, rewards[end_time] = data_obj.truncation_errors()
+        return rewards
+
+    def get_all_baseline_ke_reward(self):
+        rewards = {}
+        for timestep in np.arange(0, self.end_time + 1e-6, self.timestep_size):
+            end_time = format(timestep, ".3f")
+            data_obj = Simulation2D(file=os.path.join(self.state_data_loc, f"data_{end_time}.h5"))
+            rewards[end_time] = data_obj.result["kinetic_energy"].sum()
+        return rewards
 
     # def get_baseline_reward(self, prop):
     #     timesteps = np.arange(self.timestep_size, self.end_time + self.timestep_size, self.timestep_size)
@@ -150,7 +177,8 @@ class SimulationHandler:
             time_controller: TimeStepsController,
             scheme_writer: SchemeParametersWriter,
             baseline_data_obj: BaselineDataHandler,
-            linked_reset: bool
+            linked_reset: bool,
+            config: dict
     ):
         self.solver = solver
         self.time_controller = time_controller
@@ -161,6 +189,8 @@ class SimulationHandler:
         self.done = False
         self.layers = baseline_data_obj.layers
         self.linked_reset = linked_reset
+        self.smoothness_threshold = config.get("smoothness_threshold", 0.33)
+        self.current_data_obj = None
 
     def configure_inputfile(self, end_time):
         new_file = self.rename_inputfile(end_time)
@@ -210,13 +240,31 @@ class SimulationHandler:
         return file
 
     def get_state(self, end_time):
-        current_data = Simulation2D(file=f"runtime_data/{self.inputfile}_{end_time}/domain/data_{end_time}0*.h5")
-        if not current_data.result_exit:
+        self.current_data = Simulation2D(file=f"runtime_data/{self.inputfile}_{end_time}/domain/data_{end_time}0*.h5")
+        if not self.current_data.result_exit:
             self.is_crashed = True
             self.done = True
             return self.baseline_data_obj.states["0.000"]
         else:
-            return get_states(data_obj=current_data, layers=self.layers)
+            return get_states(data_obj=self.current_data, layers=self.layers)
+
+    def get_smoothness_reward(self, end_time):
+        _, reward = self.current_data.smoothness(threshold=self.smoothness_threshold)
+        baseline_reward = self.baseline_data_obj.smoothness[end_time]
+        improvement = reward / baseline_reward - 1
+        return improvement
+
+    def get_truncation_reward(self, end_time):
+        _, _, _, reward = self.current_data.truncation_errors()
+        baseline_reward = self.baseline_data_obj.truncation[end_time]
+        improvement = reward / baseline_reward - 1
+        return improvement
+
+    def get_ke_reward(self, end_time):
+        reward = self.current_data.result["kinetic_energy"]
+        baseline_reward = self.baseline_data_obj.kinetic[end_time]
+        improvement = reward / baseline_reward - 1
+        return improvement
 
     def rename_inputfile(self, end_time):
         old_file = f"runtime_data/inputfiles/{self.inputfile}_*.xml"
@@ -227,7 +275,6 @@ class SimulationHandler:
 
     def run(self, inputfile):
         self.solver.run_alpaca(inputfile)
-
 
 
 class DebugProfileHandler:
