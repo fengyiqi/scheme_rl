@@ -12,12 +12,7 @@ from .sim_base import (
     DebugProfileHandler,
     BaselineDataHandler
 )
-
-q_bound = (1, 10)
-cq_bound = (1, 100)
-eta_bound = (0.4, 0.9)
-ct_power_bound = (3, 15)
-action_bound = (-1, 1)
+# from .sim_base import q_bound, cq_bound, eta_bound, ct_power_bound
 
 def fmt(value, dig=".3f"):
     return format(value, dig)
@@ -28,11 +23,13 @@ class AlpacaEnv(gym.Env, ABC):
             self,
             executable: str,
             inputfile: str,
+            parameters: tuple,
             observation_space: spaces.Box,
             action_space: spaces.Box,
             timestep_size: float,
             time_span: float,
             baseline_data_loc: str,
+            linked_reset: bool = True,
             cpu_num: int = 1,
             schemefile: str = "/home/yiqi/PycharmProjects/RL2D/runtime_data/scheme.xml",
             layers: list = None,
@@ -44,37 +41,41 @@ class AlpacaEnv(gym.Env, ABC):
             config = {}
         self.observation_space = observation_space
         self.action_space = action_space
-        self.done, self.si_improve, self.ke_improve, self.evaluation = False, False, False, False
+        self.evaluation = False
         self.quality = 0
         self.config = config
-        self.linked_reset = config.get("linked_reset", True)
+        self.linked_reset = linked_reset
         self.obj = self._build_objective(
             executable=executable,
             inputfile=inputfile,
+            parameters=parameters,
             timestep_size=timestep_size,
             time_span=time_span,
             baseline_data_loc=baseline_data_loc,
+            linked_reset=linked_reset,
             cpu_num=cpu_num,
             schemefile=schemefile,
             layers=layers,
             config=config
         )
-        self.debug = DebugProfileHandler(objective=self.obj)
+        self.debug = DebugProfileHandler(objective=self.obj, parameters=parameters)
         self._build_folders()
 
     def _build_objective(
             self,
             executable: str,
             inputfile: str,
+            parameters: tuple,
             timestep_size: float,
             time_span: float,
             baseline_data_loc: str,
+            linked_reset: bool,
             cpu_num: int,
             schemefile: str,
             layers: list,
             config: dict
     ) -> SimulationHandler:
-        schemefile = SchemeParametersWriter(schemefile)
+        schemefile = SchemeParametersWriter(schemefile, parameters)
         alpaca = AlpacaExecutor(
             executable=executable,
             inputfile=inputfile,
@@ -96,34 +97,29 @@ class AlpacaEnv(gym.Env, ABC):
             time_controller=timestep_controller,
             baseline_data_obj=baseline_data_obj,
             scheme_writer=schemefile,
-            linked_reset=True,
+            linked_reset=linked_reset,
             config=config
         )
         return objective
 
 
     def _build_folders(self):
-        if not os.path.exists("runtime/inputfiles"):
-            os.makedirs("runtime/inputfiles")
+        if not os.path.exists("runtime_data/inputfiles"):
+            os.makedirs("runtime_data/inputfiles")
         else:
-            os.system("rm -rf runtime/inputfiles/*")
-        os.system(f"mv scheme_rl/xml/{self.obj.inputfile}.xml runtime_data/inputfiles/{self.obj.inputfile}")
-        os.system(f"mv scheme_rl/xml/scheme.xml runtime_data/scheme.xml")
+            os.system("rm -rf runtime_data/inputfiles/*")
+        os.system(f"cp scheme_rl/xml/{self.obj.inputfile}.xml runtime_data/inputfiles/{self.obj.inputfile}.xml")
+        os.system(f"cp scheme_rl/xml/scheme.xml runtime_data/scheme.xml")
 
     def _reset_flags_and_buffers(self):
-        # reset flags and buffers, e.g. self.counter, self.is_crashed
-        if not self.linked_reset:
-            # the is_crashed flag is used in configuring inputfile and will be reset there
-            self.is_crashed = False
-            self.obj.time_controller.counter = 1
-        self.done = False
+        self.obj.done = False
         self.quality = 0
         os.system(f"rm -rf runtime_data/{self.obj.inputfile}_*")
 
     def _if_reset_from_crashed(self):
         # "and" function
         conditions = (
-            self.linked_reset,
+            self.obj.linked_reset,
             self.obj.is_crashed,
             self.obj.time_controller.counter < self.obj.time_controller.get_total_steps() - 1,
         )
@@ -132,12 +128,14 @@ class AlpacaEnv(gym.Env, ABC):
     def reset(self, print_info=False, evaluate=False):
         self.evaluation = evaluate
         if self._if_reset_from_crashed():
-            self.obj.time_controller.counter += 0
+            self.obj.time_controller.counter += 1
             end_time = self.obj.time_controller.get_end_time_string()
             states = self.obj.baseline_data_obj.states[end_time]
             self._reset_flags_and_buffers()
             return np.array(states)
         self._reset_flags_and_buffers()
+        self.obj.time_controller.counter = 0
+        self.obj.is_crashed = False
         return self.obj.baseline_data_obj.initial_state
 
     def step(self, action: list):
@@ -152,11 +150,11 @@ class AlpacaEnv(gym.Env, ABC):
         reward = self.get_reward(end_time=end_time)
 
         if end_time == self.obj.time_controller.get_time_span_string():
-            self.done = True
+            self.obj.done = True
         if self.evaluation:
             self.debug.collect_scheme_paras()
             self.debug.flush_info()
-        return current_state, reward, self.done, {}
+        return current_state, reward, self.obj.done, {}
 
     @abstractmethod
     def get_reward(self, end_time):
@@ -171,7 +169,7 @@ class AlpacaEnv(gym.Env, ABC):
         info += f"\tInputfile: {self.obj.inputfile}\n"
         info += f"\tTimespan: (0, {self.obj.time_controller.get_time_span_string()}); " \
                 f"Timestep size: {self.obj.time_controller.get_timestep_size()}\n"
-        info += f"\tParameters: q {q_bound}; Cq {cq_bound}; Eta {eta_bound}; Ct(power) {ct_power_bound}\n"
+        # info += f"\tParameters: q {q_bound}; Cq {cq_bound}; Eta {eta_bound}; Ct(power) {ct_power_bound}\n"
         info += f"\tLayers: {self.obj.layers}\n"
         info += f"\tSmoothness: {self.obj.smoothness_threshold}\n"
         info += f"\tBaseline data: {self.obj.baseline_data_obj.state_data_loc}\n"
