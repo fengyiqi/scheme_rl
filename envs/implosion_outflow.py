@@ -4,24 +4,22 @@ from .env_base import AlpacaEnv
 from gym import spaces
 from .sim_base import action_bound
 
-
-class ImplosionEnv(AlpacaEnv):
-
+class ImplosionOutFLowEnv(AlpacaEnv):
     def __init__(self):
         config = {
             "smoothness_threshold": 0.33
         }
         layers = ["density", "kinetic_energy", "pressure"]
         paras = ("q", "cq", "eta")
-        super(ImplosionEnv, self).__init__(
+        super(ImplosionOutFLowEnv, self).__init__(
             executable="/home/yiqi/PycharmProjects/RL2D/solvers/ALPACA_32_TENO5RL_ETA",
-            inputfile="implosion_64",
+            inputfile="implosion_outflow_64",
             parameters=paras,
             observation_space=spaces.Box(low=-1.0, high=1.0, shape=(len(layers), 64, 64), dtype=np.float32),
             action_space=spaces.Box(low=action_bound[0], high=action_bound[1], shape=(len(paras), ), dtype=np.float32),
-            timestep_size=0.1,
-            time_span=2.5,
-            baseline_data_loc="/home/yiqi/PycharmProjects/RL2D/baseline/implosion_64",
+            timestep_size=0.04,
+            time_span=0.8,
+            baseline_data_loc="/home/yiqi/PycharmProjects/RL2D/baseline/implosion_outflow_64",
             linked_reset=True,
             high_res=False,
             cpu_num=4,
@@ -35,6 +33,7 @@ class ImplosionEnv(AlpacaEnv):
         else:
             # truncation error improvement
             reward_ke = self.obj.get_ke_reward(end_time=end_time)
+            reward_ke = reward_ke *5 if self.obj.time_controller.get_end_time_float() < 0.44 else reward_ke
             ke_improve = True if reward_ke > 0 else False
             # smoothness improvement
             reward_si = self.obj.get_smoothness_reward(end_time=end_time)
@@ -48,7 +47,7 @@ class ImplosionEnv(AlpacaEnv):
             action_penalty = 0
 
             self.quality += (reward_ke - si_penalty)
-            total_reward = 10 * (reward_ke - si_penalty - action_penalty)
+            total_reward = np.exp(reward_ke - si_penalty - action_penalty + 2) / 10
             if self.evaluation:
                 end_time = self.obj.time_controller.get_end_time_string()
                 self.debug.collect_info(f"{self.obj.time_controller.get_restart_time_string(end_time, decimal=3)}->")
@@ -60,7 +59,7 @@ class ImplosionEnv(AlpacaEnv):
                 self.debug.collect_info(f"quality: {round(self.quality, 3):<6}  ")
             return total_reward
 
-class ImplosionHighResEnv(AlpacaEnv):
+class ImplosionOutFlowHighResEnv(AlpacaEnv):
 
     def __init__(self):
         config = {
@@ -68,15 +67,15 @@ class ImplosionHighResEnv(AlpacaEnv):
         }
         layers = ["density", "kinetic_energy", "pressure"]
         paras = ("q", "cq", "eta")
-        super(ImplosionHighResEnv, self).__init__(
+        super(ImplosionOutFlowHighResEnv, self).__init__(
             executable="/home/yiqi/PycharmProjects/RL2D/solvers/ALPACA_32_TENO5RL_ETA",
-            inputfile="implosion_128",
+            inputfile="implosion_outflow_128",
             parameters=paras,
             observation_space=spaces.Box(low=-1.0, high=1.0, shape=(len(layers), 64, 64), dtype=np.float32),
             action_space=spaces.Box(low=action_bound[0], high=action_bound[1], shape=(len(paras), ), dtype=np.float32),
-            timestep_size=0.1,
-            time_span=2.5,
-            baseline_data_loc="/home/yiqi/PycharmProjects/RL2D/baseline/implosion_128",
+            timestep_size=0.04,
+            time_span=0.8,
+            baseline_data_loc="/home/yiqi/PycharmProjects/RL2D/baseline/implosion_outflow_128",
             linked_reset=False,
             high_res=True,
             cpu_num=4,

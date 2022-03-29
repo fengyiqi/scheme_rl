@@ -30,6 +30,7 @@ class AlpacaEnv(gym.Env, ABC):
             time_span: float,
             baseline_data_loc: str,
             linked_reset: bool = True,
+            high_res: bool = False,
             cpu_num: int = 1,
             schemefile: str = "/home/yiqi/PycharmProjects/RL2D/runtime_data/scheme.xml",
             layers: list = None,
@@ -42,7 +43,8 @@ class AlpacaEnv(gym.Env, ABC):
         self.observation_space = observation_space
         self.action_space = action_space
         self.evaluation = False
-        self.quality = 0
+        self.inputfile = inputfile
+        self.cumulative_quality, self.cumulative_reward = 0, 0
         self.config = config
         self.linked_reset = linked_reset
         self.obj = self._build_objective(
@@ -53,6 +55,7 @@ class AlpacaEnv(gym.Env, ABC):
             time_span=time_span,
             baseline_data_loc=baseline_data_loc,
             linked_reset=linked_reset,
+            high_res=high_res,
             cpu_num=cpu_num,
             schemefile=schemefile,
             layers=layers,
@@ -70,6 +73,7 @@ class AlpacaEnv(gym.Env, ABC):
             time_span: float,
             baseline_data_loc: str,
             linked_reset: bool,
+            high_res: bool,
             cpu_num: int,
             schemefile: str,
             layers: list,
@@ -90,6 +94,7 @@ class AlpacaEnv(gym.Env, ABC):
             time_span=time_span,
             data_loc=baseline_data_loc,
             layers=layers,
+            high_res=high_res,
             config=config
         )
         objective = SimulationHandler(
@@ -98,6 +103,7 @@ class AlpacaEnv(gym.Env, ABC):
             baseline_data_obj=baseline_data_obj,
             scheme_writer=schemefile,
             linked_reset=linked_reset,
+            high_res=high_res,
             config=config
         )
         return objective
@@ -113,7 +119,7 @@ class AlpacaEnv(gym.Env, ABC):
 
     def _reset_flags_and_buffers(self):
         self.obj.done = False
-        self.quality = 0
+        self.cumulative_quality, self.cumulative_reward = 0, 0
         os.system(f"rm -rf runtime_data/{self.obj.inputfile}_*")
 
     def _if_reset_from_crashed(self):
@@ -122,13 +128,14 @@ class AlpacaEnv(gym.Env, ABC):
             self.obj.linked_reset,
             self.obj.is_crashed,
             self.obj.time_controller.counter < self.obj.time_controller.get_total_steps() - 1,
+            not self.evaluation
         )
         return False not in conditions
 
     def reset(self, print_info=False, evaluate=False):
         self.evaluation = evaluate
         if self._if_reset_from_crashed():
-            self.obj.time_controller.counter += 1
+            # self.obj.time_controller.counter += 1
             end_time = self.obj.time_controller.get_end_time_string()
             states = self.obj.baseline_data_obj.states[end_time]
             self._reset_flags_and_buffers()

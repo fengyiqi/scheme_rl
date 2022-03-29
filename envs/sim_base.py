@@ -2,6 +2,7 @@ import os
 import numpy as np
 import xml.etree.ElementTree as ET
 from boiles.objective.simulation2d import Simulation2D
+import torch
 
 paras_range = dict(q=(1, 10), cq=(1, 100), eta=(0.1, 0.9), ct_power=(3, 15))
 paras_decimals = dict(q=0, cq=0, eta=4, ct_power=0)
@@ -23,7 +24,9 @@ class TimeStepsController:
     def get_timestep_size(self):
         return self._timestep_size
 
-    def get_end_time_float(self, counter):
+    def get_end_time_float(self, counter=None):
+        if counter is None:
+            return self.counter * self._timestep_size
         return counter * self._timestep_size
 
     def get_end_time_string(self, counter=None):
@@ -90,12 +93,14 @@ def normalize(value, bounds):
     normalized = (value - bounds[0]) / (bounds[1] - bounds[0])
     return normalized
 
-def get_states(data_obj, layers=None, normalize_states=True, zero_mean=zero_mean):
+def _get_states(data_obj, layers=None, normalize_states=True, zero_mean=zero_mean, ave_pool=False):
     if layers is None:
         layers = ["density", "kinetic_energy", "pressure"]
     state_matrix = []
     for state in layers:
         value = data_obj.result[state]
+        if ave_pool:
+            value = torch.nn.AvgPool2d(2)(torch.tensor(np.expand_dims(value, axis=0)))[0].numpy()
         if normalize_states:
             value = normalize(value=value, bounds=(value.min(), value.max()))
             value = value - 0.5 if zero_mean else value
@@ -109,6 +114,7 @@ class BaselineDataHandler:
             time_span,
             data_loc,
             layers,
+            high_res,
             config: dict = None
     ):
         super(BaselineDataHandler, self).__init__()
@@ -120,19 +126,21 @@ class BaselineDataHandler:
         self.state_data_loc = os.path.join(data_loc, "domain")
         self.restart_data_loc = os.path.join(data_loc, "restart")
         self.layers = layers
+        self.high_res = high_res
         self.smoothness_threshold = config.get("smoothness_threshold", 0.33)
         self.states = self.get_all_states()
         self.initial_state = self.get_initial_state()
         self.smoothness = self.get_all_baseline_smoothness_reward()
         self.truncation = self.get_all_baseline_truncation_reward()
         self.kinetic = self.get_all_baseline_ke_reward()
+        self.vorticity = self.get_all_baseline_vor_reward()
 
     def get_all_states(self):
         states = {}
         for timestep in np.arange(0, self.end_time, self.timestep_size):
             end_time = format(timestep, ".3f")
             data_obj = Simulation2D(file=os.path.join(self.state_data_loc, f"data_{end_time}*.h5"))
-            states[end_time] = get_states(data_obj=data_obj, layers=self.layers)
+            states[end_time] = _get_states(data_obj=data_obj, layers=self.layers, ave_pool=self.high_res)
         return states
 
     def get_initial_state(self):
@@ -166,6 +174,13 @@ class BaselineDataHandler:
             rewards[end_time] = data_obj.result["kinetic_energy"].sum()
         return rewards
 
+    def get_all_baseline_vor_reward(self):
+        rewards = {}
+        for timestep in np.arange(0, self.end_time + 1e-6, self.timestep_size):
+            end_time = format(timestep, ".3f")
+            data_obj = Simulation2D(file=os.path.join(self.state_data_loc, f"data_{end_time}*.h5"))
+            rewards[end_time] = data_obj.result["vorticity"].sum()
+        return rewards
 
 class SimulationHandler:
     def __init__(
@@ -175,6 +190,7 @@ class SimulationHandler:
             scheme_writer: SchemeParametersWriter,
             baseline_data_obj: BaselineDataHandler,
             linked_reset: bool,
+            high_res: bool,
             config: dict
     ):
         self.solver = solver
@@ -188,6 +204,7 @@ class SimulationHandler:
         self.layers = baseline_data_obj.layers
         self.linked_reset = linked_reset
         self.smoothness_threshold = config.get("smoothness_threshold", 0.33)
+        self.high_res = high_res
         self.current_data_obj = None
 
     def configure_inputfile(self, end_time):
@@ -240,7 +257,7 @@ class SimulationHandler:
             self.done = True
             return self.baseline_data_obj.initial_state
         else:
-            return get_states(data_obj=self.current_data, layers=self.layers)
+            return _get_states(data_obj=self.current_data, layers=self.layers, ave_pool=self.high_res)
 
     def get_smoothness_reward(self, end_time):
         _, reward = self.current_data.smoothness(threshold=self.smoothness_threshold)
@@ -257,6 +274,12 @@ class SimulationHandler:
     def get_ke_reward(self, end_time):
         reward = self.current_data.result["kinetic_energy"].sum()
         baseline_reward = self.baseline_data_obj.kinetic[end_time]
+        improvement = reward / baseline_reward - 1
+        return improvement
+
+    def get_vor_reward(self, end_time):
+        reward = self.current_data.result["vorticity"].sum()
+        baseline_reward = self.baseline_data_obj.vorticity[end_time]
         improvement = reward / baseline_reward - 1
         return improvement
 
@@ -288,7 +311,7 @@ class DebugProfileHandler:
 
     def collect_scheme_paras(self):
         for key in self.objective.scheme_writer.parameters:
-            self.collect_info(f"{key:<3}({self.objective.scheme_writer.real_actions[key]:<3}) ")
+            self.collect_info(f"{key:<3}({self.objective.scheme_writer.real_actions[key]:<4}) ")
 
     def set_evaluation(self, evaluation):
         self.evaluation = evaluation
