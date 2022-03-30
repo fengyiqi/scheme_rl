@@ -93,14 +93,14 @@ def normalize(value, bounds):
     normalized = (value - bounds[0]) / (bounds[1] - bounds[0])
     return normalized
 
-def _get_states(data_obj, layers=None, normalize_states=True, zero_mean=zero_mean, ave_pool=False):
+def _get_states(data_obj, layers=None, normalize_states=True, zero_mean=zero_mean, ave_pool=None):
     if layers is None:
         layers = ["density", "kinetic_energy", "pressure"]
     state_matrix = []
     for state in layers:
         value = data_obj.result[state]
-        if ave_pool:
-            value = torch.nn.AvgPool2d(2)(torch.tensor(np.expand_dims(value, axis=0)))[0].numpy()
+        if ave_pool is not None:
+            value = torch.nn.AvgPool2d(ave_pool)(torch.tensor(np.expand_dims(value, axis=0)))[0].numpy()
         if normalize_states:
             value = normalize(value=value, bounds=(value.min(), value.max()))
             value = value - 0.5 if zero_mean else value
@@ -140,7 +140,9 @@ class BaselineDataHandler:
         for timestep in np.arange(0, self.end_time, self.timestep_size):
             end_time = format(timestep, ".3f")
             data_obj = Simulation2D(file=os.path.join(self.state_data_loc, f"data_{end_time}*.h5"))
-            states[end_time] = _get_states(data_obj=data_obj, layers=self.layers, ave_pool=self.high_res)
+            states[end_time] = _get_states(data_obj=data_obj, layers=self.layers, ave_pool=self.high_res[1])
+            if self.high_res[0]:
+                break
         return states
 
     def get_initial_state(self):
@@ -257,7 +259,7 @@ class SimulationHandler:
             self.done = True
             return self.baseline_data_obj.initial_state
         else:
-            return _get_states(data_obj=self.current_data, layers=self.layers, ave_pool=self.high_res)
+            return _get_states(data_obj=self.current_data, layers=self.layers, ave_pool=self.high_res[1])
 
     def get_smoothness_reward(self, end_time):
         _, reward = self.current_data.smoothness(threshold=self.smoothness_threshold)

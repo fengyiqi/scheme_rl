@@ -30,7 +30,7 @@ class AlpacaEnv(gym.Env, ABC):
             time_span: float,
             baseline_data_loc: str,
             linked_reset: bool = True,
-            high_res: bool = False,
+            high_res: tuple = (False, None),
             cpu_num: int = 1,
             schemefile: str = "/home/yiqi/PycharmProjects/RL2D/runtime_data/scheme.xml",
             layers: list = None,

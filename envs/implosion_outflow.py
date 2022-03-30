@@ -21,7 +21,7 @@ class ImplosionOutFLowEnv(AlpacaEnv):
             time_span=0.8,
             baseline_data_loc="/home/yiqi/PycharmProjects/RL2D/baseline/implosion_outflow_64",
             linked_reset=True,
-            high_res=False,
+            high_res=(False, None),
             cpu_num=4,
             layers=layers,
             config=config
@@ -33,30 +33,29 @@ class ImplosionOutFLowEnv(AlpacaEnv):
         else:
             # truncation error improvement
             reward_ke = self.obj.get_ke_reward(end_time=end_time)
-            reward_ke = reward_ke *5 if self.obj.time_controller.get_end_time_float() < 0.44 else reward_ke
+            # reward_ke = reward_ke *5 if self.obj.time_controller.get_end_time_float() < 0.44 else reward_ke
             ke_improve = True if reward_ke > 0 else False
             # smoothness improvement
             reward_si = self.obj.get_smoothness_reward(end_time=end_time)
             si_improve = True if reward_si > 0 else False
             # smoothness indicator adaptive weight
-            si_penalty = abs(np.min((reward_si, 0))) ** 1.3
+            si_penalty = abs(np.min((reward_si, 0))) ** 1.0
 
             # since we modify Gaussian to SquashedGaussian, we don't need action penalty anymore.
             # modify sb3/common/distributions/line 661, DiagGaussianDistribution to SquashedDiagGaussianDistribution
-            # action_penalty = self.obj.get_action_penalty()
-            action_penalty = 0
-
-            self.quality += (reward_ke - si_penalty)
-            total_reward = np.exp(reward_ke - si_penalty - action_penalty + 2) / 10
+            quality = (ke_improve - si_penalty)
+            self.cumulative_quality += quality
+            total_reward = ((quality + 2) ** 2) / self.obj.time_controller.get_total_steps()
+            self.cumulative_reward += total_reward
             if self.evaluation:
                 end_time = self.obj.time_controller.get_end_time_string()
-                self.debug.collect_info(f"{self.obj.time_controller.get_restart_time_string(end_time, decimal=3)}->")
+                self.debug.collect_info(f"{self.obj.time_controller.get_restart_time_string(end_time, decimal=3)} -> ")
                 self.debug.collect_info(f"{end_time}: ")
                 self.debug.collect_info(f"si_penalty: {round(si_penalty, 3):<5} ")
-                self.debug.collect_info(f"ke_reward: {round(reward_ke, 3):<5} ")
-                self.debug.collect_info(f"reward: {round(total_reward, 3):<5} ")
-                self.debug.collect_info(f"improve (si, ke): {si_improve:<2}, {ke_improve:<2} ")
-                self.debug.collect_info(f"quality: {round(self.quality, 3):<6}  ")
+                self.debug.collect_info(f"ke_reward: {round(ke_improve, 3):<6} ")
+                self.debug.collect_info(f"improve (si, ke): {si_improve:<1}, {ke_improve:<1} ")
+                self.debug.collect_info(f"reward: {round(total_reward, 3):<6} ")
+                self.debug.collect_info(f"quality: {round(quality, 3):<6}  ")
             return total_reward
 
 class ImplosionOutFlowHighResEnv(AlpacaEnv):
@@ -77,7 +76,7 @@ class ImplosionOutFlowHighResEnv(AlpacaEnv):
             time_span=0.8,
             baseline_data_loc="/home/yiqi/PycharmProjects/RL2D/baseline/implosion_outflow_128",
             linked_reset=False,
-            high_res=True,
+            high_res=(True, 2),
             cpu_num=4,
             layers=layers,
             config=config
