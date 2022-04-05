@@ -50,7 +50,7 @@
             }
             else
             {
-                density := 4.0;
+                density := 3.0;
                 velocityX := 0;
                 velocityY := 0.0;
                 velocityZ := 0.0;

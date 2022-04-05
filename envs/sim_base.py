@@ -134,6 +134,7 @@ class BaselineDataHandler:
         self.truncation = self.get_all_baseline_truncation_reward()
         self.kinetic = self.get_all_baseline_ke_reward()
         self.vorticity = self.get_all_baseline_vor_reward()
+        self.cutoff_tke = self.get_all_baseline_cutoff_tke_reward()
 
     def get_all_states(self):
         states = {}
@@ -153,6 +154,8 @@ class BaselineDataHandler:
         return state
 
     def get_all_baseline_smoothness_reward(self):
+        if self.high_res[0]:
+            return None
         rewards = {}
         for timestep in np.arange(0, self.end_time + 1e-6, self.timestep_size):
             end_time = format(timestep, ".3f")
@@ -161,6 +164,8 @@ class BaselineDataHandler:
         return rewards
 
     def get_all_baseline_truncation_reward(self):
+        if self.high_res[0]:
+            return None
         rewards = {}
         for timestep in np.arange(0, self.end_time + 1e-6, self.timestep_size):
             end_time = format(timestep, ".3f")
@@ -169,6 +174,8 @@ class BaselineDataHandler:
         return rewards
 
     def get_all_baseline_ke_reward(self):
+        if self.high_res[0]:
+            return None
         rewards = {}
         for timestep in np.arange(0, self.end_time + 1e-6, self.timestep_size):
             end_time = format(timestep, ".3f")
@@ -177,11 +184,23 @@ class BaselineDataHandler:
         return rewards
 
     def get_all_baseline_vor_reward(self):
+        if self.high_res[0]:
+            return None
         rewards = {}
         for timestep in np.arange(0, self.end_time + 1e-6, self.timestep_size):
             end_time = format(timestep, ".3f")
             data_obj = Simulation2D(file=os.path.join(self.state_data_loc, f"data_{end_time}*.h5"))
             rewards[end_time] = data_obj.result["vorticity"].sum()
+        return rewards
+
+    def get_all_baseline_cutoff_tke_reward(self):
+        if self.high_res[0]:
+            return None
+        rewards = {}
+        for timestep in np.arange(0, self.end_time + 1e-6, self.timestep_size):
+            end_time = format(timestep, ".3f")
+            data_obj = Simulation2D(file=os.path.join(self.state_data_loc, f"data_{end_time}*.h5"))
+            rewards[end_time] = data_obj._create_spectrum()[32:, 1].sum()
         return rewards
 
 class SimulationHandler:
@@ -283,6 +302,12 @@ class SimulationHandler:
         reward = self.current_data.result["vorticity"].sum()
         baseline_reward = self.baseline_data_obj.vorticity[end_time]
         improvement = reward / baseline_reward - 1
+        return improvement
+
+    def get_cutoff_tke_reward(self, end_time):
+        reward = self.current_data._create_spectrum()[32:, 1].sum()
+        baseline_reward = self.baseline_data_obj.cutoff_tke[end_time]
+        improvement = 1 - reward / baseline_reward
         return improvement
 
     def get_action_penalty(self):

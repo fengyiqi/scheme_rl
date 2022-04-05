@@ -29,11 +29,14 @@ class RiemannConfig3Env(AlpacaEnv):
 
     def get_reward(self, end_time):
         if self.obj.is_crashed:
-            return -50
+            return -10
         else:
             # truncation error improvement
-            reward_nu = self.obj.get_truncation_reward(end_time=end_time)
-            nu_improve = True if reward_nu > 0 else False
+            # reward_nu = self.obj.get_truncation_reward(end_time=end_time)
+            # nu_improve = True if reward_nu > 0 else False
+            # vorticity improvement
+            reward_vor = self.obj.get_vor_reward(end_time)
+            vor_improve = True if reward_vor > 0 else False
             # smoothness improvement
             reward_si = self.obj.get_smoothness_reward(end_time=end_time)
             si_improve = True if reward_si > 0 else False
@@ -41,18 +44,18 @@ class RiemannConfig3Env(AlpacaEnv):
             si_penalty = abs(np.min((reward_si, 0))) ** 1.3
             # since we modify Gaussian to SquashedGaussian, we don't need action penalty anymore.
             # modify sb3/common/distributions/line 661, DiagGaussianDistribution to SquashedDiagGaussianDistribution
-            quality = (reward_nu - si_penalty)
+            quality = (reward_vor - si_penalty)
             self.cumulative_quality += quality
             # total_reward = 10 * ((quality + 1) ** 3) / self.obj.time_controller.get_total_steps()
-            total_reward = 10 * np.log( quality + 1 )
+            total_reward = 10 * quality
             self.cumulative_reward += total_reward
             if self.evaluation:
                 end_time = self.obj.time_controller.get_end_time_string()
                 self.debug.collect_info(f"{self.obj.time_controller.get_restart_time_string(end_time, decimal=3)} -> ")
                 self.debug.collect_info(f"{end_time}: ")
                 self.debug.collect_info(f"si_penalty: {round(si_penalty, 3):<5} ")
-                self.debug.collect_info(f"nu_reward: {round(reward_nu, 3):<6} ")
-                self.debug.collect_info(f"improve (si, nu): {si_improve:<1}, {nu_improve:<1} ")
+                self.debug.collect_info(f"vor_reward: {round(reward_vor, 3):<6} ")
+                self.debug.collect_info(f"improve (si, vor): {si_improve:<1}, {vor_improve:<1} ")
                 self.debug.collect_info(f"reward: {round(total_reward, 3):<6} ")
                 self.debug.collect_info(f"quality: {round(quality, 3):<6}  ")
             return total_reward
@@ -73,7 +76,7 @@ class RiemannConfig3HighResEnv(AlpacaEnv):
             action_space=spaces.Box(low=action_bound[0], high=action_bound[1], shape=(len(paras), ), dtype=np.float32),
             timestep_size=0.05,
             time_span=1.0,
-            baseline_data_loc="/home/yiqi/PycharmProjects/RL2D/baseline/config3_64_teno5",
+            baseline_data_loc="/home/yiqi/PycharmProjects/RL2D/baseline/config3_128",
             linked_reset=True,
             high_res=(True, 2),
             cpu_num=4,
