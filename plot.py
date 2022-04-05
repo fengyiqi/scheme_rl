@@ -1,37 +1,29 @@
 import numpy as np
 from boiles.objective.simulation2d import Simulation2D
-from .envs.base import AlpacaEnv
 import matplotlib.pyplot as plt
+from .envs.sim_base import normalize
 
 
-def timesteps(env: AlpacaEnv):
-    return np.arange(env.timestep_size, env.end_time+1e-6, env.timestep_size)
+def plot_states(env, end_times, states):
+    cols = len(end_times)
+    for state in states:
+        plt.figure(figsize=(cols*6, cols), dpi=150)
+        for i, end_time in enumerate(end_times):
+            try:
+                obj = Simulation2D(file=f"runtime_data/{env.inputfile}_{end_time}/domain/data_{end_time}*.h5")
+                data = obj.result[state]
+                plt.subplot(1, cols, i+1)
+                data = normalize(data, (data.min(), data.max()))
+                plt.imshow(data, origin="lower")
+                plt.title(f"{state} ({end_time[:-1]}s)")
+            except:
+                continue
+        plt.show()
 
-
-def runtime_rate(env: AlpacaEnv):
-    rate = []
-    for end_time in timesteps(env):
-        end_time = format(end_time, ".3f")
-        baseline_case = Simulation2D(
-            results_folder=env.baseline_data_loc,
-            result_filename=f"data_{end_time}*.h5"
-        )
-        _, _, baseline_rate = baseline_case.truncation_errors()
-        simulation_case = Simulation2D(
-            results_folder=f"runtime_data/{env.inputfile}_{end_time}/domain",
-            result_filename=f"data_{end_time}*.h5"
-        )
-        _, _, simulation_rate = simulation_case.truncation_errors()
-        rate.append([baseline_rate, simulation_rate])
-    return np.array(rate)
-
-
-def plot(env: AlpacaEnv):
-    rate = runtime_rate(env)
-    plt.plot(figsize=(5, 5), dpi=200)
-    plt.plot(rate[:, 0], c="black", linewidth=0.6, label="$TENO5$")
-    plt.plot(rate[:, 1], c="blue", linewidth=0.6, label="$TENO5_{RL}$")
-    plt.legend()
+def plot_quality(value):
+    plt.figure(figsize=(5, 3), dpi=100)
+    plt.plot(value, color="black", linewidth=0.8)
+    plt.grid()
     plt.show()
 
 

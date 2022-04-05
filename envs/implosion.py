@@ -1,494 +1,120 @@
 import numpy as np
 import torch
-from .base import AlpacaEnv, fmt, eta_bound, ct_bound
-from .data_handler import normalize
+from .env_base import AlpacaEnv
 from gym import spaces
-import xml.etree.ElementTree as ET
-
-
+from .sim_base import action_bound
 
 class ImplosionEnv(AlpacaEnv):
 
-    def __init__(self, config=None):
-        executable = "/home/yiqi/PycharmProjects/RL2D/solvers/ALPACA_32_TENO5RL_ETA"
-        class_config = dict(
-            baseline_data_loc="/home/yiqi/PycharmProjects/RL2D/baseline/implosion_64/domain",
-            scheme_file="/home/yiqi/PycharmProjects/RL2D/runtime_data/scheme.xml",
-            smoothness_threshold=0.33
-        )
-        if config is not None:
-            class_config.update(config)
+    def __init__(self):
+        config = {
+            "smoothness_threshold": 0.33
+        }
         layers = ["density", "kinetic_energy", "pressure"]
+        paras = ("q", "cq", "eta")
         super(ImplosionEnv, self).__init__(
-            executable=executable,
+            executable="/home/yiqi/PycharmProjects/RL2D/solvers/ALPACA_32_TENO5RL_ETA",
             inputfile="implosion_64",
-            observation_space=spaces.Box(low=-np.inf, high=np.inf, shape=(len(layers), 64, 64), dtype=np.float32),
+            parameters=paras,
+            observation_space=spaces.Box(low=-1.0, high=1.0, shape=(len(layers), 64, 64), dtype=np.float32),
+            action_space=spaces.Box(low=action_bound[0], high=action_bound[1], shape=(len(paras), ), dtype=np.float32),
             timestep_size=0.1,
-            end_time=2.5,
+            time_span=2.5,
+            baseline_data_loc="/home/yiqi/PycharmProjects/RL2D/baseline/implosion_64_weno5",
+            linked_reset=True,
+            high_res=(False, None),
+            cpu_num=4,
             layers=layers,
-            config=class_config
+            config=config
         )
-        if self.baseline_data_loc is not None:
-            self.ke_baseline = self.baseline_data_handler.get_baseline_reward(prop="kinetic_energy")
-            self.si_baseline = self.baseline_data_handler.get_baseline_reward(prop="smoothness_indicator")
 
-    def get_reward(self, end_time):
-        if self.is_crashed:
+    def _get_reward(self, end_time):
+        if self.obj.is_crashed:
             return -100
         else:
+            # truncation error improvement
+            reward_ke = self.obj.get_ke_reward(end_time=end_time)
+            ke_improve = True if reward_ke > 0 else False
             # smoothness improvement
-            _, reward = self.current_data.smoothness(threshold=self.smoothness_threshold)
-            reward_si = reward / self.si_baseline[end_time] - 1
-            self.si_improve = True if reward_si > 0 else False
-
-            # kinetic energy improvement (dissipation reduce)
-            ke = self.current_data.result["kinetic_energy"]
-            reward_ke = ke.sum() / self.ke_baseline[end_time] - 1
-            self.ke_improve = True if reward_ke > 0 else False
-
-            si_penalty = abs(np.min((reward_si, 0))) ** 1.1
+            reward_si = self.obj.get_smoothness_reward(end_time=end_time)
+            si_improve = True if reward_si > 0 else False
             # smoothness indicator adaptive weight
-            self.quality += (reward_ke - si_penalty)
-            total_reward = 10 * (reward_ke - si_penalty)
-            self.runtime_info += f"si_penalty: {fmt(si_penalty)}   "
-            self.runtime_info += f"Improve (si, ke)={self.si_improve:<2}, {self.ke_improve:<2} Reward: {fmt(total_reward):<6}   "
-            self.runtime_info += f"Quality: {self.quality:<5}"
+            si_penalty = abs(np.min((reward_si, 0))) ** 1.3
+
+            # since we modify Gaussian to SquashedGaussian, we don't need action penalty anymore.
+            # modify sb3/common/distributions/line 661, DiagGaussianDistribution to SquashedDiagGaussianDistribution
+            quality = (reward_ke - si_penalty)
+            self.cumulative_quality += quality
+            total_reward = 10 * reward_si
+            self.cumulative_reward += total_reward
+            if self.evaluation:
+                end_time = self.obj.time_controller.get_end_time_string()
+                self.debug.collect_info(f"{self.obj.time_controller.get_restart_time_string(end_time, decimal=3)}->")
+                self.debug.collect_info(f"{end_time}: ")
+                self.debug.collect_info(f"si_penalty: {round(si_penalty, 3):<5} ")
+                self.debug.collect_info(f"ke_reward: {round(reward_ke, 3):<5} ")
+                self.debug.collect_info(f"reward: {round(total_reward, 3):<5} ")
+                self.debug.collect_info(f"improve (si, ke): {si_improve:<2}, {ke_improve:<2} ")
+                self.debug.collect_info(f"quality: {round(self.cumulative_quality, 3):<6}  ")
             return total_reward
 
+    def get_reward(self, end_time):
+        if self.obj.is_crashed:
+            return -100
+        else:
+            # truncation error improvement
+            reward_ke = self.obj.get_ke_reward(end_time=end_time)
+            ke_improve = True if reward_ke > 0 else False
+            # smoothness improvement
+            # reward_si = self.obj.get_smoothness_reward(end_time=end_time)
+            reward_si = self.obj.get_cutoff_tke_reward(end_time=end_time)
+            si_improve = True if reward_si > 0 else False
+            # reward_si = self.obj.current_data._create_spectrum()[32:, 1].sum()
+            # si_improve =
+            # smoothness indicator adaptive weight
+            si_penalty = abs(np.min((reward_si, 0))) ** 1.0
+
+            # since we modify Gaussian to SquashedGaussian, we don't need action penalty anymore.
+            # modify sb3/common/distributions/line 661, DiagGaussianDistribution to SquashedDiagGaussianDistribution
+
+            quality = (reward_ke - si_penalty)
+            self.cumulative_quality += quality
+            total_reward = 10 * reward_si
+            self.cumulative_reward += total_reward
+            if self.evaluation:
+                end_time = self.obj.time_controller.get_end_time_string()
+                self.debug.collect_info(f"{self.obj.time_controller.get_restart_time_string(end_time, decimal=3)}->")
+                self.debug.collect_info(f"{end_time}: ")
+                self.debug.collect_info(f"si_penalty: {round(si_penalty, 3):<5} ")
+                self.debug.collect_info(f"ke_reward: {round(reward_ke, 3):<6} ")
+                self.debug.collect_info(f"reward: {round(total_reward, 3):<6} ")
+                self.debug.collect_info(f"improve (si, ke): {si_improve:<1}, {ke_improve:<1} ")
+                self.debug.collect_info(f"quality: {round(self.cumulative_quality, 3):<6}  ")
+            return total_reward
 
 class ImplosionHighResEnv(AlpacaEnv):
+
     def __init__(self):
-        executable = "/home/yiqi/PycharmProjects/RL2D/solvers/ALPACA_32_TENO5RL_ETA"
-        config = dict(
-            baseline_data_loc="/home/yiqi/PycharmProjects/RL2D/baseline/implosion_64/domain"
-        )
+        config = {
+            "smoothness_threshold": 0.33
+        }
         layers = ["density", "kinetic_energy", "pressure"]
+        paras = ("q", "cq", "eta")
         super(ImplosionHighResEnv, self).__init__(
-            executable=executable,
+            executable="/home/yiqi/PycharmProjects/RL2D/solvers/ALPACA_32_TENO5RL_ETA",
             inputfile="implosion_128",
-            observation_space=spaces.Box(low=-np.inf, high=np.inf, shape=(len(layers), 64, 64), dtype=np.float32),
+            parameters=paras,
+            observation_space=spaces.Box(low=-1.0, high=1.0, shape=(len(layers), 64, 64), dtype=np.float32),
+            action_space=spaces.Box(low=action_bound[0], high=action_bound[1], shape=(len(paras), ), dtype=np.float32),
             timestep_size=0.1,
-            end_time=2.5,
+            time_span=2.5,
+            baseline_data_loc="/home/yiqi/PycharmProjects/RL2D/baseline/implosion_128",
+            linked_reset=False,
+            high_res=True,
+            cpu_num=4,
             layers=layers,
             config=config
         )
 
-    def get_state(self, end_time):
-        self.current_data = self.objective(
-            results_folder=f"runtime_data/{self.inputfile}_{end_time}/domain",
-            result_filename=f"data_{end_time}0*.h5"
-        )
-        if not self.current_data.result_exit:
-            self.is_crashed = True
-            self.done = True
-            self.current_data = self.objective(
-                results_folder=f"runtime_data/{self.inputfile}_{end_time}/domain",
-                result_filename=f"data_{format(float(end_time) - self.timestep_size, '.3f')}0*.h5"
-            )
-
-        state = []
-        for i, layer in enumerate(self.layers):
-            value = self.current_data.result[layer]
-            value = torch.nn.AvgPool2d(2)(torch.tensor([value]))[0].numpy()
-            value = normalize(
-                value=value,
-                bounds=self.bounds[self.layers[i]],
-            )
-
-            state.append(value)
-        return np.array(state)
-
     def get_reward(self, end_time):
-        return 1
-
-
-class ImplosionOutflowEnv(AlpacaEnv):
-
-    def __init__(self):
-        executable = "/home/yiqi/PycharmProjects/RL2D/solvers/ALPACA_32_TENO5RL_ETA"
-        config = dict(
-            baseline_data_loc="/home/yiqi/PycharmProjects/RL2D/baseline/implosion_outflow_64/domain",
-            smoothness_threshold=0.33
-        )
-        layers = ["density", "kinetic_energy", "pressure"]
-        super(ImplosionOutflowEnv, self).__init__(
-            executable=executable,
-            inputfile="implosion_outflow_64",
-            observation_space=spaces.Box(low=-np.inf, high=np.inf, shape=(len(layers), 64, 64), dtype=np.float32),
-            timestep_size=0.04,
-            end_time=0.8,
-            layers=layers,
-            config=config
-        )
-        if self.baseline_data_loc is not None:
-            self.ke_baseline = self.baseline_data_handler.get_baseline_reward(prop="kinetic_energy")
-            self.si_baseline = self.baseline_data_handler.get_baseline_reward(prop="smoothness_indicator")
-
-    def get_reward(self, end_time):
-        if self.is_crashed:
-            return -100
-        else:
-            # smoothness improvement
-            _, reward = self.current_data.smoothness(threshold=self.smoothness_threshold)
-            reward_si = reward / self.si_baseline[end_time] - 1
-            self.si_improve = True if reward_si > 0 else False
-
-            # kinetic energy improvement (dissipation reduce)
-            ke = self.current_data.result["kinetic_energy"]
-            reward_ke = ke.sum() / self.ke_baseline[end_time] - 1
-            self.ke_improve = True if reward_ke > 0 else False
-
-            si_penalty = abs(np.min((reward_si, 0))) ** 1.5
-            # smoothness indicator adaptive weight
-            self.quality += (reward_ke - si_penalty)
-            total_reward = (reward_ke - si_penalty)
-            self.runtime_info += f"si_penalty: {fmt(si_penalty)}   "
-            self.runtime_info += f"Improve (si, ke)={self.si_improve, self.ke_improve}   Reward: {fmt(total_reward)}   "
-            self.runtime_info += f"Quality: {self.quality}"
-            return total_reward
-
-
-class ImplosionOutflowHighResEnv(AlpacaEnv):
-    def __init__(self):
-        executable = "/home/yiqi/PycharmProjects/RL2D/solvers/ALPACA_32_TENO5RL_ETA"
-        config = dict(
-            baseline_data_loc="/home/yiqi/PycharmProjects/RL2D/baseline/implosion_outflow_128/domain"
-        )
-        layers = ["density", "kinetic_energy", "pressure"]
-        super(ImplosionOutflowHighResEnv, self).__init__(
-            executable=executable,
-            inputfile="implosion_outflow_128",
-            observation_space=spaces.Box(low=-np.inf, high=np.inf, shape=(len(layers), 64, 64), dtype=np.float32),
-            timestep_size=0.04,
-            end_time=0.8,
-            layers=layers,
-            config=config
-        )
-
-    def get_state(self, end_time):
-        self.current_data = self.objective(
-            results_folder=f"runtime_data/{self.inputfile}_{end_time}/domain",
-            result_filename=f"data_{end_time}0*.h5"
-        )
-        if not self.current_data.result_exit:
-            self.is_crashed = True
-            self.done = True
-            self.current_data = self.objective(
-                results_folder=f"runtime_data/{self.inputfile}_{end_time}/domain",
-                result_filename=f"data_{format(float(end_time) - self.timestep_size, '.3f')}0*.h5"
-            )
-
-        state = []
-        for i, layer in enumerate(self.layers):
-            value = self.current_data.result[layer]
-            value = torch.nn.AvgPool2d(2)(torch.tensor([value]))[0].numpy()
-            value = normalize(
-                value=value,
-                bounds=self.bounds[self.layers[i]],
-            )
-
-            state.append(value)
-        return np.array(state)
-
-    def get_reward(self, end_time):
-        return 1
-
-
-class ImplosionCTEnv(AlpacaEnv):
-
-    def __init__(self, config=None):
-        executable = "/home/yiqi/PycharmProjects/RL2D/solvers/ALPACA_32_TENO5RL_ETA"
-        class_config = dict(
-            baseline_data_loc="/home/yiqi/PycharmProjects/RL2D/baseline/implosion_64/domain",
-            scheme_file="/home/yiqi/PycharmProjects/RL2D/runtime_data/scheme.xml",
-            smoothness_threshold=0.33
-        )
-        if config is not None:
-            class_config.update(config)
-        layers = ["density", "kinetic_energy", "pressure"]
-        super(ImplosionCTEnv, self).__init__(
-            executable=executable,
-            inputfile="implosion_64",
-            observation_space=spaces.Box(low=-np.inf, high=np.inf, shape=(len(layers), 64, 64), dtype=np.float32),
-            timestep_size=0.1,
-            end_time=2.5,
-            layers=layers,
-            config=class_config
-        )
-        if self.baseline_data_loc is not None:
-            self.ke_baseline = self.baseline_data_handler.get_baseline_reward(prop="kinetic_energy")
-            self.si_baseline = self.baseline_data_handler.get_baseline_reward(prop="smoothness_indicator")
-        self.action_space = spaces.Box(
-            low=np.array([-1, -1]),
-            high=np.array([1, 1]),
-            dtype=np.float32
-        )
-
-    def get_reward(self, end_time):
-        if self.is_crashed:
-            return -100
-        else:
-            # smoothness improvement
-            _, reward = self.current_data.smoothness(threshold=self.smoothness_threshold)
-            reward_si = reward / self.si_baseline[end_time] - 1
-            self.si_improve = True if reward_si > 0 else False
-
-            # kinetic energy improvement (dissipation reduce)
-            ke = self.current_data.result["kinetic_energy"]
-            reward_ke = ke.sum() / self.ke_baseline[end_time] - 1
-            self.ke_improve = True if reward_ke > 0 else False
-
-            si_penalty = abs(np.min((reward_si, 0))) ** 1.1
-            # smoothness indicator adaptive weight
-            self.quality += (reward_ke - si_penalty)
-            total_reward = 10 * (reward_ke - si_penalty)
-            self.runtime_info += f"si_penalty: {fmt(si_penalty)}   "
-            self.runtime_info += f"Improve (si, ke)={self.si_improve:<2}, {self.ke_improve:<2}   Reward: {fmt(total_reward):<6}   "
-            self.runtime_info += f"Quality: {fmt(self.quality)}"
-            return total_reward
-
-    def configure_scheme_xml(self, action):
-        tree = ET.ElementTree(file=self.schemefile)
-        root = tree.getroot()
-        root[0].text = "0"
-        ct, eta = action[0], action[1]
-
-        eta = np.round((eta + 1) / 2 * (eta_bound[1] - eta_bound[0]) + eta_bound[0], 6)
-        d1, d2 = np.round((2 + eta) / 4, 4), np.round((1 - eta) / 2, 4)
-        q = 6
-        cq = 1
-        ct_power = np.round((ct + 1) / 2 * (ct_bound[1] - ct_bound[0]) + ct_bound[0], 2)
-        ct = 0.1 ** ct_power
-
-        for i, para in enumerate([q, cq, d1, d2, ct]):
-            root[i + 2].text = str(para)
-
-        tree.write(self.schemefile)
-        if self.evaluation:
-            self.action_trajectory.append((d1, d2, eta, ct))
-            self.runtime_info += f"d1, d2, eta, ct: ({fmt(d1)}, {fmt(d2)}, {fmt(eta)}, 1.e-{ct_power:<5})  "
-
-
-class ImplosionHighResCTEnv(AlpacaEnv):
-    def __init__(self, config=None):
-        executable = "/home/yiqi/PycharmProjects/RL2D/solvers/ALPACA_32_TENO5RL_ETA"
-        class_config = dict(
-            baseline_data_loc="/home/yiqi/PycharmProjects/RL2D/baseline/implosion_64/domain",
-            scheme_file="/home/yiqi/PycharmProjects/RL2D/runtime_data/scheme.xml",
-            smoothness_threshold=0.33
-        )
-        if config is not None:
-            class_config.update(config)
-        layers = ["density", "kinetic_energy", "pressure"]
-        super(ImplosionHighResCTEnv, self).__init__(
-            executable=executable,
-            inputfile="implosion_128",
-            observation_space=spaces.Box(low=-np.inf, high=np.inf, shape=(len(layers), 64, 64), dtype=np.float32),
-            timestep_size=0.1,
-            end_time=2.5,
-            layers=layers,
-            config=class_config
-        )
-        if self.baseline_data_loc is not None:
-            self.ke_baseline = self.baseline_data_handler.get_baseline_reward(prop="kinetic_energy")
-            self.si_baseline = self.baseline_data_handler.get_baseline_reward(prop="smoothness_indicator")
-        self.action_space = spaces.Box(
-            low=np.array([-1, -1]),
-            high=np.array([1, 1]),
-            dtype=np.float32
-        )
-
-    def get_state(self, end_time):
-        self.current_data = self.objective(
-            results_folder=f"runtime_data/{self.inputfile}_{end_time}/domain",
-            result_filename=f"data_{end_time}0*.h5"
-        )
-        if not self.current_data.result_exit:
-            self.is_crashed = True
-            self.done = True
-            self.current_data = self.objective(
-                results_folder=f"runtime_data/{self.inputfile}_{end_time}/domain",
-                result_filename=f"data_{format(float(end_time) - self.timestep_size, '.3f')}0*.h5"
-            )
-
-        state = []
-        for i, layer in enumerate(self.layers):
-            value = self.current_data.result[layer]
-            value = torch.nn.AvgPool2d(2)(torch.tensor([value]))[0].numpy()
-            value = normalize(
-                value=value,
-                bounds=self.bounds[self.layers[i]],
-            )
-
-            state.append(value)
-        return np.array(state)
-
-    def configure_scheme_xml(self, action):
-        tree = ET.ElementTree(file=self.schemefile)
-        root = tree.getroot()
-        root[0].text = "0"
-        ct, eta = action[0], action[1]
-
-        eta = np.round((eta + 1) / 2 * (eta_bound[1] - eta_bound[0]) + eta_bound[0], 6)
-        d1, d2 = np.round((2 + eta) / 4, 4), np.round((1 - eta) / 2, 4)
-        q = 6
-        cq = 1
-        ct_power = round((ct + 1) / 2 * (ct_bound[1] - ct_bound[0]) + ct_bound[0])
-        ct = 0.1 ** ct_power
-
-        for i, para in enumerate([q, cq, d1, d2, ct]):
-            root[i + 2].text = str(para)
-
-        tree.write(self.schemefile)
-        if self.evaluation:
-            self.action_trajectory.append((d1, d2, eta, ct))
-            self.runtime_info += f"d1, d2, eta, ct: ({fmt(d1)}, {fmt(d2)}, {fmt(eta)}, 1.e-{ct_power})  "
-
-    def get_reward(self, end_time):
-        return 1
-
-
-class ImplosionOutflowCTEnv(AlpacaEnv):
-
-    def __init__(self):
-        executable = "/home/yiqi/PycharmProjects/RL2D/solvers/ALPACA_32_TENO5RL_ETA"
-        config = dict(
-            baseline_data_loc="/home/yiqi/PycharmProjects/RL2D/baseline/implosion_outflow_64/domain",
-            scheme_file="/home/yiqi/PycharmProjects/RL2D/runtime_data/scheme.xml",
-            smoothness_threshold=0.33
-        )
-        layers = ["density", "kinetic_energy", "pressure"]
-        super(ImplosionOutflowCTEnv, self).__init__(
-            executable=executable,
-            inputfile="implosion_outflow_64",
-            observation_space=spaces.Box(low=-np.inf, high=np.inf, shape=(len(layers), 64, 64), dtype=np.float32),
-            timestep_size=0.04,
-            end_time=0.8,
-            layers=layers,
-            config=config
-        )
-        if self.baseline_data_loc is not None:
-            self.ke_baseline = self.baseline_data_handler.get_baseline_reward(prop="kinetic_energy")
-            self.si_baseline = self.baseline_data_handler.get_baseline_reward(prop="smoothness_indicator")
-        self.action_space = spaces.Box(
-            low=np.array([-1, -1]),
-            high=np.array([1, 1]),
-            dtype=np.float32
-        )
-
-    def get_reward(self, end_time):
-        if self.is_crashed:
-            return -100
-        else:
-            # smoothness improvement
-            _, reward = self.current_data.smoothness(threshold=self.smoothness_threshold)
-            reward_si = reward / self.si_baseline[end_time] - 1
-            self.si_improve = True if reward_si > 0 else False
-
-            # kinetic energy improvement (dissipation reduce)
-            ke = self.current_data.result["kinetic_energy"]
-            reward_ke = ke.sum() / self.ke_baseline[end_time] - 1
-            self.ke_improve = True if reward_ke > 0 else False
-
-            si_penalty = abs(np.min((reward_si, 0))) ** 1.5
-            # smoothness indicator adaptive weight
-            self.quality += (reward_ke - si_penalty)
-            total_reward = 10 * (reward_ke - si_penalty)
-            self.runtime_info += f"si_penalty: {fmt(si_penalty)}   "
-            self.runtime_info += f"Improve (si, ke)={self.si_improve:<2}, {self.ke_improve:<2}   Reward: {fmt(total_reward):<6}   "
-            self.runtime_info += f"Quality: {fmt(self.quality)}"
-            return total_reward
-
-    def configure_scheme_xml(self, action):
-        tree = ET.ElementTree(file=self.schemefile)
-        root = tree.getroot()
-        root[0].text = "0"
-        ct, eta = action[0], action[1]
-
-        eta = np.round((eta + 1) / 2 * (eta_bound[1] - eta_bound[0]) + eta_bound[0], 6)
-        d1, d2 = np.round((2 + eta) / 4, 4), np.round((1 - eta) / 2, 4)
-        q = 6
-        cq = 1
-        ct_power = round((ct + 1) / 2 * (ct_bound[1] - ct_bound[0]) + ct_bound[0])
-        ct = 0.1 ** ct_power
-
-        for i, para in enumerate([q, cq, d1, d2, ct]):
-            root[i + 2].text = str(para)
-
-        tree.write(self.schemefile)
-        if self.evaluation:
-            self.action_trajectory.append((d1, d2, eta, ct))
-            self.runtime_info += f"d1, d2, eta, ct: ({fmt(d1)}, {fmt(d2)}, {fmt(eta)}, 1.e-{ct_power})  "
-
-
-class ImplosionOutflowHighResCTEnv(AlpacaEnv):
-    def __init__(self):
-        executable = "/home/yiqi/PycharmProjects/RL2D/solvers/ALPACA_32_TENO5RL_ETA"
-        config = dict(
-            baseline_data_loc="/home/yiqi/PycharmProjects/RL2D/baseline/implosion_outflow_128/domain",
-            scheme_file = "/home/yiqi/PycharmProjects/RL2D/runtime_data/scheme.xml"
-        )
-        layers = ["density", "kinetic_energy", "pressure"]
-        super(ImplosionOutflowHighResCTEnv, self).__init__(
-            executable=executable,
-            inputfile="implosion_outflow_128",
-            observation_space=spaces.Box(low=-np.inf, high=np.inf, shape=(len(layers), 64, 64), dtype=np.float32),
-            timestep_size=0.04,
-            end_time=0.8,
-            layers=layers,
-            config=config
-        )
-        self.action_space = spaces.Box(
-            low=np.array([-1, -1]),
-            high=np.array([1, 1]),
-            dtype=np.float32
-        )
-
-    def get_state(self, end_time):
-        self.current_data = self.objective(
-            results_folder=f"runtime_data/{self.inputfile}_{end_time}/domain",
-            result_filename=f"data_{end_time}0*.h5"
-        )
-        if not self.current_data.result_exit:
-            self.is_crashed = True
-            self.done = True
-            self.current_data = self.objective(
-                results_folder=f"runtime_data/{self.inputfile}_{end_time}/domain",
-                result_filename=f"data_{format(float(end_time) - self.timestep_size, '.3f')}0*.h5"
-            )
-
-        state = []
-        for i, layer in enumerate(self.layers):
-            value = self.current_data.result[layer]
-            value = torch.nn.AvgPool2d(2)(torch.tensor([value]))[0].numpy()
-            value = normalize(
-                value=value,
-                bounds=self.bounds[self.layers[i]],
-            )
-
-            state.append(value)
-        return np.array(state)
-
-    def configure_scheme_xml(self, action):
-        tree = ET.ElementTree(file=self.schemefile)
-        root = tree.getroot()
-        root[0].text = "0"
-        ct, eta = action[0], action[1]
-
-        eta = np.round((eta + 1) / 2 * (eta_bound[1] - eta_bound[0]) + eta_bound[0], 6)
-        d1, d2 = np.round((2 + eta) / 4, 4), np.round((1 - eta) / 2, 4)
-        q = 6
-        cq = 1
-        ct_power = round((ct + 1) / 2 * (ct_bound[1] - ct_bound[0]) + ct_bound[0])
-        ct = 0.1 ** ct_power
-
-        for i, para in enumerate([q, cq, d1, d2, ct]):
-            root[i + 2].text = str(para)
-
-        tree.write(self.schemefile)
-        if self.evaluation:
-            self.action_trajectory.append((d1, d2, eta, ct))
-            self.runtime_info += f"d1, d2, eta, ct: ({fmt(d1)}, {fmt(d2)}, {fmt(eta)}, 1.e-{ct_power})  "
-
-    def get_reward(self, end_time):
-        return 1
+        return 0

@@ -3,23 +3,23 @@ from .env_base import AlpacaEnv
 from gym import spaces
 from .sim_base import action_bound
 
-class RiemannConfig3Env(AlpacaEnv):
+class RMIEnv(AlpacaEnv):
 
     def __init__(self):
         config = {
-            "smoothness_threshold": 0.15
+            "smoothness_threshold": 0.3
         }
         layers = ["density", "kinetic_energy", "pressure"]
         paras = ("q", "cq", "eta")
-        super(RiemannConfig3Env, self).__init__(
+        super(RMIEnv, self).__init__(
             executable="/home/yiqi/PycharmProjects/RL2D/solvers/ALPACA_32_TENO5RL_ETA",
-            inputfile="config3_64",
+            inputfile="rmi_64",
             parameters=paras,
             observation_space=spaces.Box(low=-1.0, high=1.0, shape=(len(layers), 64, 64), dtype=np.float32),
             action_space=spaces.Box(low=action_bound[0], high=action_bound[1], shape=(len(paras), ), dtype=np.float32),
-            timestep_size=0.05,
-            time_span=1.0,
-            baseline_data_loc="/home/yiqi/PycharmProjects/RL2D/baseline/config3_64_weno5",
+            timestep_size=0.02,
+            time_span=0.5,
+            baseline_data_loc="/home/yiqi/PycharmProjects/RL2D/baseline/rmi_64_weno5",
             linked_reset=True,
             high_res=(False, None),
             cpu_num=4,
@@ -32,21 +32,17 @@ class RiemannConfig3Env(AlpacaEnv):
             return -10
         else:
             # truncation error improvement
-            # reward_nu = self.obj.get_truncation_reward(end_time=end_time)
-            # nu_improve = True if reward_nu > 0 else False
-            # vorticity improvement
-            reward_vor = self.obj.get_vor_reward(end_time)
+            reward_vor = self.obj.get_vor_reward(end_time=end_time)
             vor_improve = True if reward_vor > 0 else False
             # smoothness improvement
             reward_si = self.obj.get_smoothness_reward(end_time=end_time)
             si_improve = True if reward_si > 0 else False
             # smoothness indicator adaptive weight
-            si_penalty = abs(np.min((reward_si, 0))) ** 1.3
+            si_penalty = abs(np.min((reward_si, 0))) ** 1.0
             # since we modify Gaussian to SquashedGaussian, we don't need action penalty anymore.
             # modify sb3/common/distributions/line 661, DiagGaussianDistribution to SquashedDiagGaussianDistribution
             quality = (reward_vor - si_penalty)
             self.cumulative_quality += quality
-            # total_reward = 10 * ((quality + 1) ** 3) / self.obj.time_controller.get_total_steps()
             total_reward = 10 * quality
             self.cumulative_reward += total_reward
             if self.evaluation:
@@ -60,26 +56,80 @@ class RiemannConfig3Env(AlpacaEnv):
                 self.debug.collect_info(f"quality: {round(quality, 3):<6}  ")
             return total_reward
 
-class RiemannConfig3HighResEnv(AlpacaEnv):
+class RMIHighRes128Env(AlpacaEnv):
 
     def __init__(self):
         config = {
-            "smoothness_threshold": 0.15
+            "smoothness_threshold": 0.1
         }
         layers = ["density", "kinetic_energy", "pressure"]
         paras = ("q", "cq", "eta")
-        super(RiemannConfig3HighResEnv, self).__init__(
+        super(RMIHighRes128Env, self).__init__(
             executable="/home/yiqi/PycharmProjects/RL2D/solvers/ALPACA_32_TENO5RL_ETA",
-            inputfile="config3_128",
+            inputfile="rmi_128",
             parameters=paras,
             observation_space=spaces.Box(low=-1.0, high=1.0, shape=(len(layers), 64, 64), dtype=np.float32),
             action_space=spaces.Box(low=action_bound[0], high=action_bound[1], shape=(len(paras), ), dtype=np.float32),
-            timestep_size=0.05,
-            time_span=1.0,
-            baseline_data_loc="/home/yiqi/PycharmProjects/RL2D/baseline/config3_128",
-            linked_reset=True,
+            timestep_size=0.02,
+            time_span=0.5,
+            baseline_data_loc="/home/yiqi/PycharmProjects/RL2D/baseline/rmi_128_teno5",
+            linked_reset=False,
             high_res=(True, 2),
-            cpu_num=4,
+            cpu_num=6,
+            layers=layers,
+            config=config
+        )
+
+    def get_reward(self, end_time):
+        return 0
+
+class RMIHighRes256Env(AlpacaEnv):
+
+    def __init__(self):
+        config = {
+            "smoothness_threshold": 0.1
+        }
+        layers = ["density", "kinetic_energy", "pressure"]
+        paras = ("q", "cq", "eta")
+        super(RMIHighRes256Env, self).__init__(
+            executable="/home/yiqi/PycharmProjects/RL2D/solvers/ALPACA_32_TENO5RL_ETA",
+            inputfile="rmi_256",
+            parameters=paras,
+            observation_space=spaces.Box(low=-1.0, high=1.0, shape=(len(layers), 64, 64), dtype=np.float32),
+            action_space=spaces.Box(low=action_bound[0], high=action_bound[1], shape=(len(paras), ), dtype=np.float32),
+            timestep_size=0.02,
+            time_span=0.5,
+            baseline_data_loc="/home/yiqi/PycharmProjects/RL2D/baseline/rmi_256_weno5",
+            linked_reset=False,
+            high_res=(True, 4),
+            cpu_num=6,
+            layers=layers,
+            config=config
+        )
+
+    def get_reward(self, end_time):
+        return 0
+
+class RMIHighRes512Env(AlpacaEnv):
+
+    def __init__(self):
+        config = {
+            "smoothness_threshold": 0.1
+        }
+        layers = ["density", "kinetic_energy", "pressure"]
+        paras = ("q", "cq", "eta")
+        super(RMIHighRes512Env, self).__init__(
+            executable="/home/yiqi/PycharmProjects/RL2D/solvers/ALPACA_32_TENO5RL_ETA",
+            inputfile="rmi_512",
+            parameters=paras,
+            observation_space=spaces.Box(low=-1.0, high=1.0, shape=(len(layers), 64, 64), dtype=np.float32),
+            action_space=spaces.Box(low=action_bound[0], high=action_bound[1], shape=(len(paras), ), dtype=np.float32),
+            timestep_size=0.02,
+            time_span=0.5,
+            baseline_data_loc="/home/yiqi/PycharmProjects/RL2D/baseline/rmi_512_weno5",
+            linked_reset=False,
+            high_res=(True, 8),
+            cpu_num=6,
             layers=layers,
             config=config
         )

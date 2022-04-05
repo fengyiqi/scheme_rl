@@ -1,6 +1,6 @@
 import numpy as np
 import torch
-from .base import AlpacaEnv, fmt
+from .env_base import AlpacaEnv, fmt
 from .data_handler import normalize
 from gym import spaces
 
