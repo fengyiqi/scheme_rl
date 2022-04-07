@@ -7,19 +7,19 @@ class RMIEnv(AlpacaEnv):
 
     def __init__(self):
         config = {
-            "smoothness_threshold": 0.3
+            "smoothness_threshold": 0.1
         }
         layers = ["density", "kinetic_energy", "pressure"]
         paras = ("q", "cq", "eta")
         super(RMIEnv, self).__init__(
-            executable="/home/yiqi/PycharmProjects/RL2D/solvers/ALPACA_32_TENO5RL_ETA",
+            executable="/home/yiqi/PycharmProjects/RL2D/solvers/ALPACA_32_TENO5RL_ETA_ROEM",
             inputfile="rmi_64",
             parameters=paras,
             observation_space=spaces.Box(low=-1.0, high=1.0, shape=(len(layers), 64, 64), dtype=np.float32),
             action_space=spaces.Box(low=action_bound[0], high=action_bound[1], shape=(len(paras), ), dtype=np.float32),
             timestep_size=0.02,
             time_span=0.5,
-            baseline_data_loc="/home/yiqi/PycharmProjects/RL2D/baseline/rmi_64_weno5",
+            baseline_data_loc="/home/yiqi/PycharmProjects/RL2D/baseline/rmi_64_weno5_roem",
             linked_reset=True,
             high_res=(False, None),
             cpu_num=4,
@@ -38,12 +38,12 @@ class RMIEnv(AlpacaEnv):
             reward_si = self.obj.get_smoothness_reward(end_time=end_time)
             si_improve = True if reward_si > 0 else False
             # smoothness indicator adaptive weight
-            si_penalty = abs(np.min((reward_si, 0))) ** 1.0
+            si_penalty = abs(np.min((reward_si, 0))) ** 0.6
             # since we modify Gaussian to SquashedGaussian, we don't need action penalty anymore.
             # modify sb3/common/distributions/line 661, DiagGaussianDistribution to SquashedDiagGaussianDistribution
             quality = (reward_vor - si_penalty)
             self.cumulative_quality += quality
-            total_reward = 10 * quality
+            total_reward = 1 * np.tanh(quality)
             self.cumulative_reward += total_reward
             if self.evaluation:
                 end_time = self.obj.time_controller.get_end_time_string()
@@ -72,7 +72,7 @@ class RMIHighRes128Env(AlpacaEnv):
             action_space=spaces.Box(low=action_bound[0], high=action_bound[1], shape=(len(paras), ), dtype=np.float32),
             timestep_size=0.02,
             time_span=0.5,
-            baseline_data_loc="/home/yiqi/PycharmProjects/RL2D/baseline/rmi_128_teno5",
+            baseline_data_loc="/home/yiqi/PycharmProjects/RL2D/baseline/rmi_64_teno5_roem",
             linked_reset=False,
             high_res=(True, 2),
             cpu_num=6,
@@ -99,7 +99,7 @@ class RMIHighRes256Env(AlpacaEnv):
             action_space=spaces.Box(low=action_bound[0], high=action_bound[1], shape=(len(paras), ), dtype=np.float32),
             timestep_size=0.02,
             time_span=0.5,
-            baseline_data_loc="/home/yiqi/PycharmProjects/RL2D/baseline/rmi_256_weno5",
+            baseline_data_loc="/home/yiqi/PycharmProjects/RL2D/baseline/rmi_64_teno5_roem",
             linked_reset=False,
             high_res=(True, 4),
             cpu_num=6,
@@ -126,7 +126,7 @@ class RMIHighRes512Env(AlpacaEnv):
             action_space=spaces.Box(low=action_bound[0], high=action_bound[1], shape=(len(paras), ), dtype=np.float32),
             timestep_size=0.02,
             time_span=0.5,
-            baseline_data_loc="/home/yiqi/PycharmProjects/RL2D/baseline/rmi_512_weno5",
+            baseline_data_loc="/home/yiqi/PycharmProjects/RL2D/baseline/rmi_64_teno5_roem",
             linked_reset=False,
             high_res=(True, 8),
             cpu_num=6,

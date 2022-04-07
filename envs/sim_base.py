@@ -3,6 +3,9 @@ import numpy as np
 import xml.etree.ElementTree as ET
 from boiles.objective.simulation2d import Simulation2D
 import torch
+from collections import deque
+
+SM_PROP = "numerical_dissipation_rate"
 
 paras_range = dict(q=(1, 10), cq=(1, 100), eta=(0.1, 0.9), ct_power=(3, 15))
 paras_decimals = dict(q=0, cq=0, eta=4, ct_power=0)
@@ -99,7 +102,7 @@ def _get_states(data_obj, layers=None, normalize_states=True, zero_mean=zero_mea
     state_matrix = []
     for state in layers:
         value = data_obj.result[state]
-        if ave_pool is not None:
+        if ave_pool is not None and value.shape != (64, 64):
             value = torch.nn.AvgPool2d(ave_pool)(torch.tensor(np.expand_dims(value, axis=0)))[0].numpy()
         if normalize_states:
             value = normalize(value=value, bounds=(value.min(), value.max()))
@@ -160,7 +163,7 @@ class BaselineDataHandler:
         for timestep in np.arange(0, self.end_time + 1e-6, self.timestep_size):
             end_time = format(timestep, ".3f")
             data_obj = Simulation2D(file=os.path.join(self.state_data_loc, f"data_{end_time}*.h5"))
-            _, rewards[end_time] = data_obj.smoothness(threshold=self.smoothness_threshold)
+            _, rewards[end_time] = data_obj.smoothness(threshold=self.smoothness_threshold, property=SM_PROP)
         return rewards
 
     def get_all_baseline_truncation_reward(self):
@@ -281,7 +284,7 @@ class SimulationHandler:
             return _get_states(data_obj=self.current_data, layers=self.layers, ave_pool=self.high_res[1])
 
     def get_smoothness_reward(self, end_time):
-        _, reward = self.current_data.smoothness(threshold=self.smoothness_threshold)
+        _, reward = self.current_data.smoothness(threshold=self.smoothness_threshold, property=SM_PROP)
         baseline_reward = self.baseline_data_obj.smoothness[end_time]
         improvement = reward / baseline_reward - 1
         return improvement
@@ -335,10 +338,14 @@ class DebugProfileHandler:
         self.evaluation = False
         self.parameters = parameters
         self.info = ""
+        self.action_trajectory = []
 
     def collect_scheme_paras(self):
         for key in self.objective.scheme_writer.parameters:
             self.collect_info(f"{key:<3}({self.objective.scheme_writer.real_actions[key]:<4}) ")
+        self.action_trajectory.append([
+            self.objective.scheme_writer.real_actions[key] for key in self.objective.scheme_writer.parameters
+        ])
 
     def set_evaluation(self, evaluation):
         self.evaluation = evaluation
@@ -349,3 +356,4 @@ class DebugProfileHandler:
     def flush_info(self):
         print(self.info)
         self.info = ""
+        # self.action_trajectory = []

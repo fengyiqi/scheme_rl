@@ -120,6 +120,7 @@ class AlpacaEnv(gym.Env, ABC):
     def _reset_flags_and_buffers(self):
         self.obj.done = False
         self.cumulative_quality, self.cumulative_reward = 0, 0
+        self.debug.action_trajectory = []
         os.system(f"rm -rf runtime_data/{self.obj.inputfile}_*")
 
     def _if_reset_from_crashed(self):

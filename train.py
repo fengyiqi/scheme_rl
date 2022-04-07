@@ -19,7 +19,8 @@ class PPOTrain:
             folder_name: str = None,
             features_extractor=CustomCNN,
             features_dim: int = 256,
-            random_seed: int = None
+            random_seed: int = None,
+            last_iteration: int = None,
     ):
         self.env = env
         self.n_episode_to_collect = n_episode_to_collect
@@ -32,7 +33,8 @@ class PPOTrain:
         self.reward_his, self.quality_list = [], [["iteration", "quality"]]
         self.steps = int(env.obj.time_span / env.obj.timestep_size)
 
-        self.iteration = 0
+        self.iteration = last_iteration if last_iteration is not None else 0
+        self.continue_training = False
 
     def _build_folders(self):
         if not os.path.exists(os.path.join("ppo_models", self.folder_name)):
@@ -40,8 +42,10 @@ class PPOTrain:
         else:
             os.system(f"rm -rf ppo_models/{self.folder_name}/*")
 
-    def initialize_model(self):
-        self._build_folders()
+    def initialize_model(self, continue_training=False):
+        self.continue_training = continue_training
+        if not continue_training:
+            self._build_folders()
         tmp_path = f"./ppo_models/{self.folder_name}/"
         new_logger = configure(tmp_path, ["csv", "tensorboard"])
 
@@ -64,10 +68,14 @@ class PPOTrain:
         model.set_logger(new_logger)
         return model
 
-    def train(self, model, iteration, eval_interval, plot_time, plot_state=None):
+    def train(self, model: PPO, iteration, eval_interval, plot_time, plot_state=None, model_path=None):
+        # assert self.iteration == 0, "You "
         if plot_state is None:
             plot_state = ["density", "vorticity", "numerical_dissipation_rate"]
-        quality_list_plot = []
+        # quality_list_plot = []
+        if self.continue_training:
+            assert model_path is not None, "You must specify a 'model_path'"
+            model.load(model_path, device="cpu")
         model.set_env(self.env)
         for i in range(self.iteration, self.iteration + iteration):
             self.env.reset(evaluate=False)
@@ -77,7 +85,7 @@ class PPOTrain:
                 log_interval=1,
                 reset_num_timesteps=False
             )
-            if eval_interval is not None and i+1 % eval_interval == 0:
+            if eval_interval is not None and (i+1) % eval_interval == 0:
                 obs = self.env.reset(evaluate=True)
                 dones = False
                 while not dones:
@@ -85,8 +93,8 @@ class PPOTrain:
                     obs, rewards, dones, info = self.env.step(action)
                 print(f"{i + 1}: reward, quality =", format(self.env.cumulative_reward, ".4f"),
                       format(self.env.cumulative_quality, ".4f"))
-                quality_list_plot.append(self.env.cumulative_quality)
-                plot_quality(quality_list_plot)
+                # quality_list_plot.append(self.env.cumulative_quality)
+                # plot_quality(quality_list_plot)
                 plot_states(self.env, end_times=plot_time, states=plot_state)
                 clear_output(wait=True)
             model.save(f"ppo_models/{self.folder_name}/seed{self.seed}_{i}.zip")
