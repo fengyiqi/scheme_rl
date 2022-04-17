@@ -68,8 +68,10 @@ class PPOTrain:
         model.set_logger(new_logger)
         return model
 
-    def train(self, model: PPO, iteration, eval_interval, plot_time, plot_state=None, model_path=None):
+    def train(self, model: PPO, iteration, eval_interval=None, plot_time=None, plot_state=None, model_path=None):
         # assert self.iteration == 0, "You "
+        if plot_time is None:
+            plot_time = []
         if plot_state is None:
             plot_state = ["density", "vorticity", "numerical_dissipation_rate"]
         # quality_list_plot = []

@@ -3,7 +3,6 @@ import numpy as np
 import xml.etree.ElementTree as ET
 from boiles.objective.simulation2d import Simulation2D
 import torch
-from collections import deque
 
 SM_PROP = "numerical_dissipation_rate"
 
@@ -138,6 +137,8 @@ class BaselineDataHandler:
         self.kinetic = self.get_all_baseline_ke_reward()
         self.vorticity = self.get_all_baseline_vor_reward()
         self.cutoff_tke = self.get_all_baseline_cutoff_tke_reward()
+        self.cutoff_vor = self.get_all_baseline_cutoff_vor_reward()
+        self.dispersive = self.get_all_baseline_dispersive_reward()
 
     def get_all_states(self):
         states = {}
@@ -173,7 +174,17 @@ class BaselineDataHandler:
         for timestep in np.arange(0, self.end_time + 1e-6, self.timestep_size):
             end_time = format(timestep, ".3f")
             data_obj = Simulation2D(file=os.path.join(self.state_data_loc, f"data_{end_time}*.h5"))
-            _, _, _, rewards[end_time] = data_obj.truncation_errors()
+            _, _, rewards[end_time], _ = data_obj.truncation_errors()
+        return rewards
+
+    def get_all_baseline_dispersive_reward(self):
+        if self.high_res[0]:
+            return None
+        rewards = {}
+        for timestep in np.arange(0, self.end_time + 1e-6, self.timestep_size):
+            end_time = format(timestep, ".3f")
+            data_obj = Simulation2D(file=os.path.join(self.state_data_loc, f"data_{end_time}*.h5"))
+            _, rewards[end_time], _, _ = data_obj.truncation_errors()
         return rewards
 
     def get_all_baseline_ke_reward(self):
@@ -194,6 +205,16 @@ class BaselineDataHandler:
             end_time = format(timestep, ".3f")
             data_obj = Simulation2D(file=os.path.join(self.state_data_loc, f"data_{end_time}*.h5"))
             rewards[end_time] = data_obj.result["vorticity"].sum()
+        return rewards
+
+    def get_all_baseline_cutoff_vor_reward(self):
+        if self.high_res[0]:
+            return None
+        rewards = {}
+        for timestep in np.arange(0, self.end_time + 1e-6, self.timestep_size):
+            end_time = format(timestep, ".3f")
+            data_obj = Simulation2D(file=os.path.join(self.state_data_loc, f"data_{end_time}*.h5"))
+            rewards[end_time] = np.where(data_obj.result["vorticity"] > 1, 0, data_obj.result["vorticity"]).sum()
         return rewards
 
     def get_all_baseline_cutoff_tke_reward(self):
@@ -290,9 +311,15 @@ class SimulationHandler:
         return improvement
 
     def get_truncation_reward(self, end_time):
-        _, _, _, reward = self.current_data.truncation_errors()
+        _, _, reward, _ = self.current_data.truncation_errors()
         baseline_reward = self.baseline_data_obj.truncation[end_time]
-        improvement = reward / baseline_reward - 1
+        improvement = 1 - reward / baseline_reward
+        return improvement
+
+    def get_dispersive_penalty(self, end_time):
+        _, reward, _, _ = self.current_data.truncation_errors()
+        baseline_reward = self.baseline_data_obj.dispersive[end_time]
+        improvement = 1 - reward / baseline_reward
         return improvement
 
     def get_ke_reward(self, end_time):
@@ -311,6 +338,13 @@ class SimulationHandler:
         reward = self.current_data._create_spectrum()[32:, 1].sum()
         baseline_reward = self.baseline_data_obj.cutoff_tke[end_time]
         improvement = 1 - reward / baseline_reward
+        return improvement
+
+    def get_cutoff_vor_penalty(self, end_time):
+        vor = self.current_data.result["vorticity"]
+        vor = np.where(vor > 1, 0, vor).sum()
+        baseline_vor = self.baseline_data_obj.cutoff_vor[end_time]
+        improvement =  1 - vor / baseline_vor
         return improvement
 
     def get_action_penalty(self):

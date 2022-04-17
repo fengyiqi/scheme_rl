@@ -30,22 +30,22 @@ class ImplosionEnv(AlpacaEnv):
 
     def _get_reward(self, end_time):
         if self.obj.is_crashed:
-            return -100
+            return -10
         else:
             # truncation error improvement
             reward_ke = self.obj.get_ke_reward(end_time=end_time)
             ke_improve = True if reward_ke > 0 else False
             # smoothness improvement
-            reward_si = self.obj.get_smoothness_reward(end_time=end_time)
-            si_improve = True if reward_si > 0 else False
+            penalty_si = self.obj.get_dispersive_penalty(end_time)
+            si_improve = True if penalty_si > 0 else False
             # smoothness indicator adaptive weight
-            si_penalty = abs(np.min((reward_si, 0))) ** 1.3
+            si_penalty = abs(np.min((penalty_si, 0))) ** 1.3
 
             # since we modify Gaussian to SquashedGaussian, we don't need action penalty anymore.
             # modify sb3/common/distributions/line 661, DiagGaussianDistribution to SquashedDiagGaussianDistribution
             quality = (reward_ke - si_penalty)
             self.cumulative_quality += quality
-            total_reward = 10 * reward_si
+            total_reward = 10 * quality
             self.cumulative_reward += total_reward
             if self.evaluation:
                 end_time = self.obj.time_controller.get_end_time_string()
