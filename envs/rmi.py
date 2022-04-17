@@ -3,6 +3,7 @@ from .env_base import AlpacaEnv
 from gym import spaces
 from .sim_base import action_bound
 
+
 class RMIEnv(AlpacaEnv):
 
     def __init__(self):
@@ -13,6 +14,7 @@ class RMIEnv(AlpacaEnv):
         paras = ("q", "cq", "eta")
         super(RMIEnv, self).__init__(
             executable="/home/yiqi/PycharmProjects/RL2D/solvers/ALPACA_32_TENO5RL_ETA_ROEM",
+            schemefile="/home/yiqi/PycharmProjects/RL2D/runtime_data/scheme.xml",
             inputfile="rmi_64",
             parameters=paras,
             observation_space=spaces.Box(low=-1.0, high=1.0, shape=(len(layers), 64, 64), dtype=np.float32),
@@ -48,7 +50,7 @@ class RMIEnv(AlpacaEnv):
             # modify sb3/common/distributions/line 661, DiagGaussianDistribution to SquashedDiagGaussianDistribution
             quality = (reward_vor - si_penalty)
             self.cumulative_quality += quality
-            total_reward = 10 * quality
+            total_reward = 10 * quality + 1
             self.cumulative_reward += total_reward
             if self.evaluation:
                 end_time = self.obj.time_controller.get_end_time_string()
@@ -60,6 +62,7 @@ class RMIEnv(AlpacaEnv):
                 self.debug.collect_info(f"reward: {round(total_reward, 3):<6} ")
                 self.debug.collect_info(f"quality: {round(quality, 3):<6}  ")
             return total_reward
+
 
 class RMIHighRes128Env(AlpacaEnv):
 
@@ -88,6 +91,7 @@ class RMIHighRes128Env(AlpacaEnv):
     def get_reward(self, end_time):
         return 0
 
+
 class RMIHighRes256Env(AlpacaEnv):
 
     def __init__(self):
@@ -114,6 +118,7 @@ class RMIHighRes256Env(AlpacaEnv):
 
     def get_reward(self, end_time):
         return 0
+
 
 class RMIHighRes512Env(AlpacaEnv):
 

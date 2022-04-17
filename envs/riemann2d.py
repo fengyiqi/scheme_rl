@@ -14,6 +14,7 @@ class RiemannConfig3Env(AlpacaEnv):
         paras = ("q", "cq", "eta")
         super(RiemannConfig3Env, self).__init__(
             executable="/home/yiqi/PycharmProjects/RL2D/solvers/ALPACA_32_TENO5RL_ETA",
+            schemefile="/home/yiqi/PycharmProjects/RL2D/runtime_data/scheme.xml",
             inputfile="config3_64",
             parameters=paras,
             observation_space=spaces.Box(low=-1.0, high=1.0, shape=(len(layers), 64, 64), dtype=np.float32),
