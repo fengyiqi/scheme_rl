@@ -44,8 +44,10 @@ class RMIEnv(AlpacaEnv):
 
             # penalty_disper = self.obj.get_dispersive_penalty(end_time)
             # si_penalty += abs(np.min((penalty_disper, 0))) ** 1.3
-            if self.obj.time_controller.get_end_time_float() < 0.12:
-                si_penalty *= 10
+
+            # if self.obj.time_controller.get_end_time_float() < 0.12:
+            #     si_penalty *= 10
+
             # since we modify Gaussian to SquashedGaussian, we don't need action penalty anymore.
             # modify sb3/common/distributions/line 661, DiagGaussianDistribution to SquashedDiagGaussianDistribution
             quality = (reward_vor - si_penalty)

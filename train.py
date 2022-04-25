@@ -90,7 +90,6 @@ class PPOTrain:
             print(f"load model from {model_path}")
         model.set_env(self.env)
         for i in range(self.iteration, self.iteration + iteration):
-            print("iteration: ", i)
             self.env.reset(evaluate=False, iteration=i)
             model.policy.float()
             model.learn(
@@ -111,6 +110,7 @@ class PPOTrain:
                 plot_states(self.env, end_times=plot_time, states=plot_state)
                 clear_output(wait=True)
             model.save(f"ppo_models/{self.folder_name}/seed{self.seed}_{i}.zip")
+            # print("iteration: ", i)
         self.iteration = iteration
 
     @staticmethod

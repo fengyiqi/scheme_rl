@@ -25,7 +25,7 @@ class ImplosionEnv(AlpacaEnv):
             baseline_data_loc="/home/yiqi/PycharmProjects/RL2D/baseline/implosion_64_weno5",
             linked_reset=True,
             high_res=(False, None),
-            cpu_num=4,
+            cpu_num=1,
             layers=layers,
             config=config
         )
@@ -108,15 +108,14 @@ class ImplosionEnv(AlpacaEnv):
             # reward_si = self.obj.get_smoothness_reward(end_time=end_time)
             reward_si = self.obj.get_dispersive_penalty(end_time=end_time)
             si_improve = True if reward_si > 0 else False
-            # reward_si = self.obj.current_data._create_spectrum()[32:, 1].sum()
-            # si_improve =
+
             # smoothness indicator adaptive weight
             si_penalty = abs(np.min((reward_si, 0))) ** 0.8
-
+            a_penalty = self.obj.get_action_penalty() ** 2
             # since we modify Gaussian to SquashedGaussian, we don't need action penalty anymore.
             # modify sb3/common/distributions/line 661, DiagGaussianDistribution to SquashedDiagGaussianDistribution
 
-            quality = (reward_ke - si_penalty)
+            quality = (reward_ke - si_penalty - a_penalty)
             self.cumulative_quality += quality
             total_reward = 5 * quality + 1
             self.cumulative_reward += total_reward
@@ -125,6 +124,7 @@ class ImplosionEnv(AlpacaEnv):
                 self.debug.collect_info(f"{self.obj.time_controller.get_restart_time_string(end_time, decimal=3)} -> ")
                 self.debug.collect_info(f"{end_time}: ")
                 self.debug.collect_info(f"si_penalty: {round(si_penalty, 3):<5} ")
+                self.debug.collect_info(f"a_penalty: {round(a_penalty, 3):<5} ")
                 self.debug.collect_info(f"ke_reward: {round(reward_ke, 3):<6} ")
                 self.debug.collect_info(f"improve (si, vor): {si_improve:<1}, {ke_improve:<1} ")
                 self.debug.collect_info(f"reward: {round(total_reward, 3):<6} ")

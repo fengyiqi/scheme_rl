@@ -135,8 +135,8 @@ class AlpacaEnv(gym.Env, ABC):
 
     def reset(self, print_info=False, evaluate=False, iteration=-1):
         self.evaluation = evaluate
-        if iteration > 10:
-            self.linked_reset = False
+        if iteration > 5:
+            self.obj.linked_reset = False
         if self._if_reset_from_crashed():
             # self.obj.time_controller.counter += 1
             end_time = self.obj.time_controller.get_end_time_string()

@@ -52,6 +52,7 @@ class SchemeParametersWriter:
     def __init__(self, file, parameters):
         self.file = file
         self.parameters = parameters
+        self.last_net_action = (0, 0, 0)
         self.net_action = None
         self.real_action = None
 
@@ -348,10 +349,13 @@ class SimulationHandler:
         return improvement
 
     def get_action_penalty(self):
-        raw_action = np.array(self.scheme_writer.net_action)
-        deviation = [np.max((np.abs(action) - action_bound[1], 0)) for action in raw_action]
-        penalty = np.linalg.norm(deviation, ord=2)
-        return penalty
+        if self.time_controller.get_end_time_float() > self.time_controller.get_timestep_size():
+            last_action = np.array(self.scheme_writer.last_net_action)
+            current_action = np.array(self.scheme_writer.net_action)
+            diff = np.linalg.norm(last_action - current_action)
+        else:
+            diff = 0
+        return diff
 
     def rename_inputfile(self, end_time):
         old_file = f"runtime_data/inputfiles/{self.inputfile}*"
