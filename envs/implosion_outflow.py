@@ -4,6 +4,7 @@ from .env_base import AlpacaEnv
 from gym import spaces
 from .sim_base import action_bound
 
+
 class ImplosionOutFLowEnv(AlpacaEnv):
     def __init__(self):
         config = {
@@ -13,6 +14,7 @@ class ImplosionOutFLowEnv(AlpacaEnv):
         paras = ("q", "cq", "eta")
         super(ImplosionOutFLowEnv, self).__init__(
             executable="/home/yiqi/PycharmProjects/RL2D/solvers/ALPACA_32_TENO5RL_ETA",
+            schemefile="/home/yiqi/PycharmProjects/RL2D/runtime_data/scheme.xml",
             inputfile="implosion_outflow_64",
             parameters=paras,
             observation_space=spaces.Box(low=-1.0, high=1.0, shape=(len(layers), 64, 64), dtype=np.float32),
@@ -36,23 +38,24 @@ class ImplosionOutFLowEnv(AlpacaEnv):
             # reward_ke = reward_ke *5 if self.obj.time_controller.get_end_time_float() < 0.44 else reward_ke
             ke_improve = True if reward_ke > 0 else False
             # smoothness improvement
-            reward_si = self.obj.get_smoothness_reward(end_time=end_time)
+            reward_si = self.obj.get_dispersive_penalty(end_time=end_time)
             si_improve = True if reward_si > 0 else False
             # smoothness indicator adaptive weight
-            si_penalty = abs(np.min((reward_si, 0))) ** 1.0
+            si_penalty = abs(np.min((reward_si, 0))) ** 1.5
 
             # since we modify Gaussian to SquashedGaussian, we don't need action penalty anymore.
             # modify sb3/common/distributions/line 661, DiagGaussianDistribution to SquashedDiagGaussianDistribution
-            quality = (ke_improve - si_penalty)
+            quality = (reward_ke - si_penalty)
             self.cumulative_quality += quality
-            total_reward = ((quality + 2) ** 2) / self.obj.time_controller.get_total_steps()
+            # total_reward = ((quality + 2) ** 2) / self.obj.time_controller.get_total_steps()
+            total_reward = quality + 1
             self.cumulative_reward += total_reward
             if self.evaluation:
                 end_time = self.obj.time_controller.get_end_time_string()
                 self.debug.collect_info(f"{self.obj.time_controller.get_restart_time_string(end_time, decimal=3)} -> ")
                 self.debug.collect_info(f"{end_time}: ")
                 self.debug.collect_info(f"si_penalty: {round(si_penalty, 3):<5} ")
-                self.debug.collect_info(f"ke_reward: {round(ke_improve, 3):<6} ")
+                self.debug.collect_info(f"ke_reward: {round(reward_ke, 3):<6} ")
                 self.debug.collect_info(f"improve (si, ke): {si_improve:<1}, {ke_improve:<1} ")
                 self.debug.collect_info(f"reward: {round(total_reward, 3):<6} ")
                 self.debug.collect_info(f"quality: {round(quality, 3):<6}  ")

@@ -68,19 +68,30 @@ class PPOTrain:
         model.set_logger(new_logger)
         return model
 
-    def train(self, model: PPO, iteration, eval_interval=None, plot_time=None, plot_state=None, model_path=None):
+    def train(
+            self,
+            model: PPO,
+            iteration,
+            eval_interval=None,
+            plot_time=None,
+            plot_state=None,
+            continue_training=False,
+            model_path=None
+    ):
         # assert self.iteration == 0, "You "
         if plot_time is None:
             plot_time = []
         if plot_state is None:
             plot_state = ["density", "vorticity", "numerical_dissipation_rate"]
         # quality_list_plot = []
-        if self.continue_training:
+        if continue_training:
             assert model_path is not None, "You must specify a 'model_path'"
             model.load(model_path, device="cpu")
+            print(f"load model from {model_path}")
         model.set_env(self.env)
         for i in range(self.iteration, self.iteration + iteration):
-            self.env.reset(evaluate=False)
+            print("iteration: ", i)
+            self.env.reset(evaluate=False, iteration=i)
             model.policy.float()
             model.learn(
                 total_timesteps=self.n_episode_to_collect * self.steps,

@@ -235,7 +235,7 @@ class SimulationHandler:
             scheme_writer: SchemeParametersWriter,
             baseline_data_obj: BaselineDataHandler,
             linked_reset: bool,
-            high_res: bool,
+            high_res: tuple,
             config: dict
     ):
         self.solver = solver

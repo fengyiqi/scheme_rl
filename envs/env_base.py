@@ -43,6 +43,7 @@ class AlpacaEnv(gym.Env, ABC):
         self.observation_space = observation_space
         self.action_space = action_space
         self.evaluation = False
+        self.iteration = None
         self.inputfile = inputfile
         self.cumulative_quality, self.cumulative_reward = 0, 0
         self.config = config
@@ -73,7 +74,7 @@ class AlpacaEnv(gym.Env, ABC):
             time_span: float,
             baseline_data_loc: str,
             linked_reset: bool,
-            high_res: bool,
+            high_res: tuple,
             cpu_num: int,
             schemefile: str,
             layers: list,
@@ -108,7 +109,6 @@ class AlpacaEnv(gym.Env, ABC):
         )
         return objective
 
-
     def _build_folders(self):
         if not os.path.exists("runtime_data/inputfiles"):
             os.makedirs("runtime_data/inputfiles")
@@ -133,8 +133,10 @@ class AlpacaEnv(gym.Env, ABC):
         )
         return False not in conditions
 
-    def reset(self, print_info=False, evaluate=False):
+    def reset(self, print_info=False, evaluate=False, iteration=-1):
         self.evaluation = evaluate
+        if iteration > 10:
+            self.linked_reset = False
         if self._if_reset_from_crashed():
             # self.obj.time_controller.counter += 1
             end_time = self.obj.time_controller.get_end_time_string()
