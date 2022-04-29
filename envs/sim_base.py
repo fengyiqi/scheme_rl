@@ -345,15 +345,17 @@ class SimulationHandler:
         vor = self.current_data.result["vorticity"]
         vor = np.where(vor > 1, 0, vor).sum()
         baseline_vor = self.baseline_data_obj.cutoff_vor[end_time]
-        improvement =  1 - vor / baseline_vor
+        improvement = 1 - vor / baseline_vor
         return improvement
 
     def get_action_penalty(self):
         if self.time_controller.get_end_time_float() > self.time_controller.get_timestep_size():
             last_action = np.array(self.scheme_writer.last_net_action)
             current_action = np.array(self.scheme_writer.net_action)
-            diff = np.linalg.norm(last_action - current_action)
+            diff = np.abs(last_action - current_action).mean()
+            self.scheme_writer.last_net_action = self.scheme_writer.net_action
         else:
+            self.scheme_writer.last_net_action = self.scheme_writer.net_action
             diff = 0
         return diff
 

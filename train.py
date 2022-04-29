@@ -1,4 +1,5 @@
 import os
+import numpy as np
 from .envs.env_base import AlpacaEnv
 from .networks import CustomCNN
 from IPython.display import clear_output
@@ -8,6 +9,13 @@ from stable_baselines3.common.logger import configure
 from .plot import plot_states, plot_quality
 
 SEED = 100
+
+
+def back_scale(a):
+    a1 = (a[0] - 1) / 9 * 2 - 1
+    a2 = (a[1] - 1) / 99 * 2 - 1
+    a3 = (a[2] - 1) / 0.8 * 2 - 1
+    return np.array([a1, a2, a3])
 
 
 class PPOTrain:
@@ -114,15 +122,19 @@ class PPOTrain:
         self.iteration = iteration
 
     @staticmethod
-    def eval(env, model_path, plot_time, plot_state=None):
+    def eval(env, model_path, plot_time, plot_state=None, actions=None):
         if plot_state is None:
             plot_state = ["density", "vorticity", "numerical_dissipation_rate"]
         model = PPO.load(model_path, env=env, device="cpu")
         model.policy.float()
         obs = env.reset(evaluate=True)
         dones = False
+        i = 0
         while not dones:
-            action, _states = model.predict(obs, deterministic=True)
+            if actions is None:
+                action, _ = model.predict(obs, deterministic=True)
+            else:
+                action = back_scale(actions[i])
             obs, rewards, dones, info = env.step(action)
         plot_states(
             env,
@@ -130,3 +142,4 @@ class PPOTrain:
             states=plot_state
         )
         clear_output(wait=True)
+

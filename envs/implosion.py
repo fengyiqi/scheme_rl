@@ -25,7 +25,7 @@ class ImplosionEnv(AlpacaEnv):
             baseline_data_loc="/home/yiqi/PycharmProjects/RL2D/baseline/implosion_64_weno5",
             linked_reset=True,
             high_res=(False, None),
-            cpu_num=1,
+            cpu_num=4,
             layers=layers,
             config=config
         )

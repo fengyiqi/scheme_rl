@@ -22,7 +22,7 @@ class RiemannConfig3Env(AlpacaEnv):
             timestep_size=0.05,
             time_span=1.0,
             baseline_data_loc="/home/yiqi/PycharmProjects/RL2D/baseline/config3_64_weno5",
-            linked_reset=True,
+            linked_reset=False,
             high_res=(False, None),
             cpu_num=4,
             layers=layers,
@@ -37,16 +37,16 @@ class RiemannConfig3Env(AlpacaEnv):
             # reward_nu = self.obj.get_truncation_reward(end_time=end_time)
             # nu_improve = True if reward_nu > 0 else False
             # vorticity improvement
-            reward_vor = self.obj.get_ke_reward(end_time) * 20
-            vor_improve = True if reward_vor > 0 else False
+            reward_ke = self.obj.get_ke_reward(end_time) * 20
+            ke_improve = True if reward_ke > 0 else False
             # smoothness improvement
             penalty_si = self.obj.get_dispersive_penalty(end_time)
             si_improve = True if penalty_si > 0 else False
             # smoothness indicator adaptive weight
-            si_penalty = abs(np.min((penalty_si, 0))) ** 1.2
+            si_penalty = abs(np.min((penalty_si, 0))) ** 1.25
             # since we modify Gaussian to SquashedGaussian, we don't need action penalty anymore.
             # modify sb3/common/distributions/line 661, DiagGaussianDistribution to SquashedDiagGaussianDistribution
-            quality = (reward_vor - si_penalty)
+            quality = (reward_ke - si_penalty)
             self.cumulative_quality += quality
             # total_reward = 10 * ((quality + 1) ** 3) / self.obj.time_controller.get_total_steps()
             total_reward = 10 * quality + 1
@@ -56,8 +56,8 @@ class RiemannConfig3Env(AlpacaEnv):
                 self.debug.collect_info(f"{self.obj.time_controller.get_restart_time_string(end_time, decimal=3)} -> ")
                 self.debug.collect_info(f"{end_time}: ")
                 self.debug.collect_info(f"si_penalty: {round(si_penalty, 3):<5} ")
-                self.debug.collect_info(f"vor_reward: {round(reward_vor, 3):<6} ")
-                self.debug.collect_info(f"improve (si, vor): {si_improve:<1}, {vor_improve:<1} ")
+                self.debug.collect_info(f"vor_reward: {round(reward_ke, 3):<6} ")
+                self.debug.collect_info(f"improve (si, vor): {si_improve:<1}, {ke_improve:<1} ")
                 self.debug.collect_info(f"reward: {round(total_reward, 3):<6} ")
                 self.debug.collect_info(f"quality: {round(quality, 3):<6}  ")
             return total_reward

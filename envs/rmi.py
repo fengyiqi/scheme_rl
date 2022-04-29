@@ -21,7 +21,7 @@ class RMIEnv(AlpacaEnv):
             action_space=spaces.Box(low=action_bound[0], high=action_bound[1], shape=(len(paras), ), dtype=np.float32),
             timestep_size=0.02,
             time_span=0.5,
-            baseline_data_loc="/home/yiqi/PycharmProjects/RL2D/baseline/rmi_64_weno5_roem",
+            baseline_data_loc="/home/yiqi/PycharmProjects/RL2D/baseline/rmi_64_teno5lin_roem",
             linked_reset=True,
             high_res=(False, None),
             cpu_num=4,
@@ -40,7 +40,8 @@ class RMIEnv(AlpacaEnv):
             penalty_si = self.obj.get_dispersive_penalty(end_time)
             si_improve = True if penalty_si > 0 else False
             # smoothness indicator adaptive weight
-            si_penalty = abs(np.min((penalty_si, 0))) ** 1.0
+            si_penalty = abs(np.min((penalty_si, 0))) ** 1.1
+            # a_penalty = self.obj.get_action_penalty() ** 2
 
             # penalty_disper = self.obj.get_dispersive_penalty(end_time)
             # si_penalty += abs(np.min((penalty_disper, 0))) ** 1.3
@@ -59,6 +60,7 @@ class RMIEnv(AlpacaEnv):
                 self.debug.collect_info(f"{self.obj.time_controller.get_restart_time_string(end_time, decimal=3)} -> ")
                 self.debug.collect_info(f"{end_time}: ")
                 self.debug.collect_info(f"si_penalty: {round(si_penalty, 3):<5} ")
+                # self.debug.collect_info(f"a_penalty: {round(a_penalty, 3):<5} ")
                 self.debug.collect_info(f"vor_reward: {round(reward_vor, 3):<6} ")
                 self.debug.collect_info(f"improve (si, vor): {si_improve:<1}, {vor_improve:<1} ")
                 self.debug.collect_info(f"reward: {round(total_reward, 3):<6} ")
