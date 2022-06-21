@@ -13,6 +13,7 @@ from .sim_base import (
     BaselineDataHandler
 )
 # from .sim_base import q_bound, cq_bound, eta_bound, ct_power_bound
+PRINT_VERBOSE = True
 
 def fmt(value, dig=".3f"):
     return format(value, dig)
@@ -164,7 +165,8 @@ class AlpacaEnv(gym.Env, ABC):
             self.obj.done = True
         if self.evaluation:
             self.debug.collect_scheme_paras()
-            self.debug.flush_info()
+            if PRINT_VERBOSE:
+                self.debug.flush_info()
         return current_state, reward, self.obj.done, {}
 
     @abstractmethod

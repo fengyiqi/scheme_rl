@@ -6,8 +6,8 @@ import torch
 
 SM_PROP = "numerical_dissipation_rate"
 
-paras_range = dict(q=(1, 10), cq=(1, 100), eta=(0.1, 0.9), ct_power=(3, 15))
-paras_decimals = dict(q=0, cq=0, eta=4, ct_power=0)
+paras_range = dict(q=(1, 6), cq=(1, 100), eta=(0.2, 0.4), ct_power=(3, 15))
+paras_decimals = dict(q=0, cq=1, eta=4, ct_power=0)
 paras_default = dict(q=6, cq=1, eta=0.4, ct_power=5)
 paras_index = dict(q=0, cq=1, eta=2, ct_power=3)
 
@@ -133,13 +133,14 @@ class BaselineDataHandler:
         self.smoothness_threshold = config.get("smoothness_threshold", 0.33)
         self.states = self.get_all_states()
         self.initial_state = self.get_initial_state()
-        self.smoothness = self.get_all_baseline_smoothness_reward()
-        self.truncation = self.get_all_baseline_truncation_reward()
+        # self.smoothness = self.get_all_baseline_smoothness_reward()
+        # self.truncation = self.get_all_baseline_truncation_reward()
         self.kinetic = self.get_all_baseline_ke_reward()
-        self.vorticity = self.get_all_baseline_vor_reward()
-        self.cutoff_tke = self.get_all_baseline_cutoff_tke_reward()
-        self.cutoff_vor = self.get_all_baseline_cutoff_vor_reward()
+        # self.vorticity = self.get_all_baseline_vor_reward()
+        # self.cutoff_tke = self.get_all_baseline_cutoff_tke_reward()
+        # self.cutoff_vor = self.get_all_baseline_cutoff_vor_reward()
         self.dispersive = self.get_all_baseline_dispersive_reward()
+        # self.implosion_teno5lin_disper_upperbound = self.get_all_baseline_teno5lin_disper_upperbound()
 
     def get_all_states(self):
         states = {}
@@ -227,6 +228,17 @@ class BaselineDataHandler:
             data_obj = Simulation2D(file=os.path.join(self.state_data_loc, f"data_{end_time}*.h5"))
             rewards[end_time] = data_obj._create_spectrum()[32:, 1].sum()
         return rewards
+
+    def get_all_baseline_teno5lin_disper_upperbound(self):
+        if self.high_res[0]:
+            return None
+        upperbound = {}
+        for timestep in np.arange(0, self.end_time + 1e-6, self.timestep_size):
+            end_time = format(timestep, ".3f")
+            teno5lin_data_obj = Simulation2D(file=f"/home/yiqi/PycharmProjects/RL2D/baseline/implosion_64_teno5lin/domain/data_{end_time}*.h5")
+            teno5lin_disper = abs(teno5lin_data_obj.truncation_errors()[1])
+            upperbound[end_time] = teno5lin_disper / abs(self.dispersive[end_time])
+        return upperbound
 
 class SimulationHandler:
     def __init__(
@@ -322,6 +334,14 @@ class SimulationHandler:
         baseline_reward = self.baseline_data_obj.dispersive[end_time]
         improvement = 1 - reward / baseline_reward
         return improvement
+
+    def get_dispersive_comparison(self, end_time):
+        # compare with TENO5LIN
+        current_disper = abs(self.current_data.truncation_errors()[1])
+        baseline_disper = abs(self.baseline_data_obj.dispersive[end_time])
+        ratio = current_disper / baseline_disper
+        teno5lin_disper_ratio = self.baseline_data_obj.implosion_teno5lin_disper_upperbound[end_time]
+        return ratio - teno5lin_disper_ratio
 
     def get_ke_reward(self, end_time):
         reward = self.current_data.result["kinetic_energy"].sum()
