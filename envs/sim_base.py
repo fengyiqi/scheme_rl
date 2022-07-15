@@ -1,5 +1,6 @@
 import os
 import numpy as np
+
 import xml.etree.ElementTree as ET
 from boiles.objective.simulation2d import Simulation2D
 import torch
@@ -7,12 +8,12 @@ import torch
 SM_PROP = "numerical_dissipation_rate"
 
 paras_range = dict(q=(1, 6), cq=(1, 100), eta=(0.2, 0.4), ct_power=(3, 15))
-paras_decimals = dict(q=0, cq=1, eta=4, ct_power=0)
+paras_decimals = dict(q=0, cq=0, eta=4, ct_power=0)
 paras_default = dict(q=6, cq=1, eta=0.4, ct_power=5)
 paras_index = dict(q=0, cq=1, eta=2, ct_power=3)
 
 action_bound = (-1, 1)
-zero_mean=True
+
 
 class TimeStepsController:
     def __init__(self, time_span, timestep_size):
@@ -92,23 +93,28 @@ class AlpacaExecutor:
         os.system(f"cd runtime_data; mpiexec -n {self.cpu_num} {self.executable} inputfiles/{inputfile}")
 
 
-def normalize(value, bounds):
-    normalized = (value - bounds[0]) / (bounds[1] - bounds[0])
-    return normalized
-
-def _get_states(data_obj, layers=None, normalize_states=True, zero_mean=zero_mean, ave_pool=None):
-    if layers is None:
-        layers = ["density", "kinetic_energy", "pressure"]
-    state_matrix = []
-    for state in layers:
-        value = data_obj.result[state]
-        if ave_pool is not None and value.shape != (64, 64):
-            value = torch.nn.AvgPool2d(ave_pool)(torch.tensor(np.expand_dims(value, axis=0)))[0].numpy()
-        if normalize_states:
-            value = normalize(value=value, bounds=(value.min(), value.max()))
-            value = value - 0.5 if zero_mean else value
-        state_matrix.append(value)
-    return state_matrix
+# def _get_states(data_obj, layers=None, normalize_states=True, zero_mean=zero_mean, ave_pool=None):
+#     if layers is None:
+#         layers = ["density", "velocity", "pressure"]
+#     state_matrix = []
+#     for state in layers:
+#         if state == "velocity":
+#             value = np.sqrt(data_obj.result["velocity_x"]**2 + data_obj.result["velocity_y"]**2)
+#         # only for shear
+#         # elif state == "pressure":
+#         #     value = data_obj.result[state] / 100
+#         else:
+#             value = data_obj.result[state]
+#         if ave_pool is not None and value.shape != (64, 64):
+#             value = torch.nn.AvgPool2d(ave_pool)(torch.tensor(np.expand_dims(value, axis=0)))[0].numpy()
+#         if normalize_states:
+#             # only for shear
+#             if state != "density" and state != "pressure":
+#                 value = normalize(value=value, bounds=(value.min(), value.max()))
+#             value = value - 0.5 if zero_mean else value
+#         state_matrix.append(value)
+#     # print(state_matrix)
+#     return state_matrix
 
 class BaselineDataHandler:
     def __init__(
@@ -118,12 +124,13 @@ class BaselineDataHandler:
             data_loc,
             layers,
             high_res,
+            get_state_func,
             config: dict = None
     ):
         super(BaselineDataHandler, self).__init__()
 
         if layers is None:
-            layers = ["density", "kinetic_energy", "pressure"]
+            layers = ["density", "velocity_x", "pressure"]
         self.timestep_size = timestep_size
         self.end_time = time_span
         self.state_data_loc = os.path.join(data_loc, "domain")
@@ -131,6 +138,7 @@ class BaselineDataHandler:
         self.layers = layers
         self.high_res = high_res
         self.smoothness_threshold = config.get("smoothness_threshold", 0.33)
+        self.get_state_func = get_state_func
         self.states = self.get_all_states()
         self.initial_state = self.get_initial_state()
         # self.smoothness = self.get_all_baseline_smoothness_reward()
@@ -147,7 +155,7 @@ class BaselineDataHandler:
         for timestep in np.arange(0, self.end_time, self.timestep_size):
             end_time = format(timestep, ".3f")
             data_obj = Simulation2D(file=os.path.join(self.state_data_loc, f"data_{end_time}*.h5"))
-            states[end_time] = _get_states(data_obj=data_obj, layers=self.layers, ave_pool=self.high_res[1])
+            states[end_time] = self.get_state_func(data_obj=data_obj, layers=self.layers, ave_pool=self.high_res[1])
             if self.high_res[0]:
                 break
         return states
@@ -157,6 +165,9 @@ class BaselineDataHandler:
         if "kinetic_energy" in self.layers:
             index = self.layers.index("kinetic_energy")
             state[index] = np.zeros((64, 64))
+        # if "velocity" in self.layers:
+        #     index = self.layers.index("velocity")
+        #     state[index] = np.zeros((64, 64))
         return state
 
     def get_all_baseline_smoothness_reward(self):
@@ -263,6 +274,7 @@ class SimulationHandler:
         self.linked_reset = linked_reset
         self.smoothness_threshold = config.get("smoothness_threshold", 0.33)
         self.high_res = high_res
+        self.current_data = None
         self.current_data_obj = None
 
     def configure_inputfile(self, end_time):
@@ -315,7 +327,7 @@ class SimulationHandler:
             self.done = True
             return self.baseline_data_obj.initial_state
         else:
-            return _get_states(data_obj=self.current_data, layers=self.layers, ave_pool=self.high_res[1])
+            return self.baseline_data_obj.get_state_func(data_obj=self.current_data, layers=self.layers, ave_pool=self.high_res[1])
 
     def get_smoothness_reward(self, end_time):
         _, reward = self.current_data.smoothness(threshold=self.smoothness_threshold, property=SM_PROP)
