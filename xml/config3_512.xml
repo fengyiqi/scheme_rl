@@ -132,11 +132,11 @@
 
    <restart>
       <restore>
-         <mode>Forced</mode> 
+         <mode>Off</mode>
          <fileName>config3_128_0.950/restart/restart_0.950000.h5</fileName>
       </restore>
       <snapshots>
-         <type>Stamps</type> 
+         <type>Off</type>
          <interval> 3600 </interval> 
          <intervalsToKeep> 2 </intervalsToKeep> 
          <stamps>
@@ -149,7 +149,7 @@
       <timeNamingFactor> 1.e0 </timeNamingFactor>
       <standardOutput> 
          <type> Interval </type> 
-         <interval>  0.01 </interval>
+         <interval>  0.1 </interval>
 	      <stamps>
             <ts1> 0.0004 </ts1>
          </stamps>
