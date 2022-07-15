@@ -1,134 +1,118 @@
 import numpy as np
-import torch
-from .env_base import AlpacaEnv, fmt
-from .data_handler import normalize
+from .env_base import AlpacaEnv
 from gym import spaces
+from .sim_base import action_bound
 
 
-class ShearFlowEnv(AlpacaEnv):
+class FreeShearEnv(AlpacaEnv):
 
     def __init__(self):
-        executable = "/home/yiqi/PycharmProjects/RL2D/solvers/ALPACA_32_TENO5RL_ETA"
-        layers = ["schlieren", "vorticity", "numerical_dissipation_rate"]
-        config = dict(
-            baseline_data_loc="/home/yiqi/PycharmProjects/RL2D/baseline/shear_64/domain",
-            smoothness_threshold=None
-        )
-        super(ShearFlowEnv, self).__init__(
-            executable=executable,
+        config = {
+            "smoothness_threshold": 0.15
+        }
+        layers = ["density", "velocity_x", "velocity_y", "pressure"]
+        paras = ("q", "cq", "eta")
+        super(FreeShearEnv, self).__init__(
+            executable="/home/yiqi/PycharmProjects/RL2D/solvers/ALPACA_32_TENO5RL_ETA",
+            schemefile="/home/yiqi/PycharmProjects/RL2D/runtime_data/scheme.xml",
             inputfile="shear_64",
-            observation_space=spaces.Box(low=-np.inf, high=np.inf, shape=(len(layers), 64, 64), dtype=np.float32),
-            timestep_size=0.05,
-            end_time=1.2,
+            parameters=paras,
+            observation_space=spaces.Box(low=-1.0, high=1.0, shape=(len(layers), 64, 64), dtype=np.float32),
+            action_space=spaces.Box(low=action_bound[0], high=action_bound[1], shape=(len(paras), ), dtype=np.float32),
+            timestep_size=0.01,
+            time_span=2.0,
+            baseline_data_loc="/home/yiqi/PycharmProjects/RL2D/baseline/shear_64_weno5",
+            linked_reset=False,
+            high_res=(False, None),
+            cpu_num=4,
             layers=layers,
             config=config
         )
-        if self.baseline_data_loc is not None:
-            self.nu_baseline = self.baseline_data_handler.get_baseline_reward(prop="numerical_dissipation_rate")
-        self.nu_improve = False
 
     def get_reward(self, end_time):
-        if self.is_crashed:
-            return -100
+        if self.obj.is_crashed:
+            return -10
         else:
-            # numerical errors improvement
-            _, _, reward = self.current_data.truncation_errors()
-            # reward = 1 - reward / self.nu_baseline[end_time]
-            reward = -reward + 5
-            self.nu_improve = True if reward > 0 else False
-            total_reward = reward * 1
-            self.runtime_info += f"Improve nu = {self.nu_improve}   Reward: {fmt(total_reward)}"
+
+            reward_ke = self.obj.get_ke_reward(end_time)
+            ke_improve = True if reward_ke > 0 else False
+            # smoothness improvement
+            reward_si = self.obj.get_dispersive_penalty(end_time)
+            si_improve = True if reward_si > 0 else False
+            si_penalty = abs(np.min((reward_si, 0))) ** 1
+            # since we modify Gaussian to SquashedGaussian, we don't need action penalty anymore.
+            # modify sb3/common/distributions/line 661, DiagGaussianDistribution to SquashedDiagGaussianDistribution
+            quality = (reward_ke - si_penalty)
+            self.cumulative_quality += quality
+            total_reward = 10 * (quality + .02)
+            # if total_reward < 0:
+            #     self.obj.done = True
+            #     return -10
+            self.cumulative_reward += total_reward
+            if self.evaluation:
+                end_time = self.obj.time_controller.get_end_time_string()
+                self.debug.collect_info(f"{self.obj.time_controller.get_restart_time_string(end_time, decimal=3)} -> ")
+                self.debug.collect_info(f"{end_time}: ")
+                self.debug.collect_info(f"disper: {round(reward_si, 3):<6} ")
+                self.debug.collect_info(f"disper_penalty: {round(si_penalty, 3):<5} ")
+                self.debug.collect_info(f"ke_reward: {round(reward_ke, 3):<6} ")
+                self.debug.collect_info(f"reward: {round(total_reward, 3):<6} ")
+                self.debug.collect_info(f"improve (si, vor): {si_improve:<1}, {ke_improve:<1} ")
+                self.debug.collect_info(f"quality: {round(quality, 3):<6}  ")
             return total_reward
 
 
-class ShearFlowHighResEnv(AlpacaEnv):
+class FreeShearHighRes128Env(AlpacaEnv):
 
     def __init__(self):
-        executable = "/home/yiqi/PycharmProjects/RL2D/solvers/ALPACA_32_TENO5RL_ETA"
-        layers = ["schlieren", "vorticity", "numerical_dissipation_rate"]
-        config = dict(
-            baseline_data_loc="/home/yiqi/PycharmProjects/RL2D/baseline/shear_64/domain",
-            smoothness_threshold=None
-        )
-        super(ShearFlowHighResEnv, self).__init__(
-            executable=executable,
+        config = {
+            "smoothness_threshold": 0.15
+        }
+        layers = ["density", "velocity_x", "velocity_y", "pressure"]
+        paras = ("q", "cq", "eta")
+        super(FreeShearHighRes128Env, self).__init__(
+            executable="/home/yiqi/PycharmProjects/RL2D/solvers/ALPACA_32_TENO5RL_ETA",
             inputfile="shear_128",
-            observation_space=spaces.Box(low=-np.inf, high=np.inf, shape=(len(layers), 64, 64), dtype=np.float32),
-            timestep_size=0.05,
-            end_time=1.2,
+            parameters=paras,
+            observation_space=spaces.Box(low=-1.0, high=1.0, shape=(len(layers), 64, 64), dtype=np.float32),
+            action_space=spaces.Box(low=action_bound[0], high=action_bound[1], shape=(len(paras), ), dtype=np.float32),
+            timestep_size=0.01,
+            time_span=2.0,
+            baseline_data_loc="/home/yiqi/PycharmProjects/RL2D/baseline/shear_64_weno5",
+            linked_reset=False,
+            high_res=(True, 2),
+            cpu_num=6,
             layers=layers,
             config=config
         )
-        if self.baseline_data_loc is not None:
-            self.nu_baseline = self.baseline_data_handler.get_baseline_reward(prop="numerical_dissipation_rate")
-        self.nu_improve = False
-
-    def get_state(self, end_time):
-        self.current_data = self.objective(
-            results_folder=f"runtime_data/{self.inputfile}_{end_time}/domain",
-            result_filename=f"data_{end_time}0*.h5"
-        )
-        if not self.current_data.result_exit:
-            self.is_crashed = True
-            self.done = True
-            self.current_data = self.objective(
-                results_folder=f"runtime_data/{self.inputfile}_{end_time}/domain",
-                result_filename=f"data_{format(float(end_time) - self.timestep_size, '.3f')}0*.h5"
-            )
-
-        state = []
-        for i, layer in enumerate(self.layers):
-            value = self.current_data.result[layer]
-            value = torch.nn.AvgPool2d(2)(torch.tensor([value]))[0].numpy()
-            value = normalize(
-                value=value,
-                bounds=self.bounds[self.layers[i]],
-            )
-
-            state.append(value)
-        return np.array(state)
 
     def get_reward(self, end_time):
-        return 1
-# class ImplosionHighResEnv(AlpacaEnv):
-#     def __init__(self):
-#         executable = "/home/yiqi/PycharmProjects/RL2D/solvers/ALPACA_32_TENO5RL_ETA"
-#         config = dict(
-#             baseline_data_loc="/home/yiqi/PycharmProjects/RL2D/full_implosion/full_implosion_64/domain"
-#         )
-#         super(ImplosionHighResEnv, self).__init__(
-#             executable=executable,
-#             inputfile="implosion_128",
-#             timestep_size=0.1,
-#             end_time=2.5,
-#             layers=["density", "kinetic_energy", "pressure"],
-#             config=config
-#         )
-#
-#     def get_state(self, end_time):
-#         self.current_data = self.objective(
-#             results_folder=f"runtime_data/{self.inputfile}_{end_time}/domain",
-#             result_filename=f"data_{end_time}0*.h5"
-#         )
-#         if not self.current_data.result_exit:
-#             self.is_crashed = True
-#             self.done = True
-#             self.current_data = self.objective(
-#                 results_folder=f"runtime_data/{self.inputfile}_{end_time}/domain",
-#                 result_filename=f"data_{format(float(end_time) - self.timestep_size, '.3f')}0*.h5"
-#             )
-#
-#         state = []
-#         for i, layer in enumerate(self.layers):
-#             value = self.current_data.result[layer]
-#             value = normalize_state(
-#                 value=value,
-#                 bounds=self.state_bounds[layer],
-#                 layer=layer
-#             )
-#             value = torch.nn.AvgPool2d(2)(torch.tensor([value]))[0].numpy().tolist()
-#             state.append(value)
-#         return np.array(state)
-#
-#     def get_reward(self, end_time):
-#         return 1
+        return 0
+
+
+class FreeShearHighRes256Env(AlpacaEnv):
+
+    def __init__(self):
+        config = {
+            "smoothness_threshold": 0.15
+        }
+        layers = ["density", "velocity_x", "velocity_y", "pressure"]
+        paras = ("q", "cq", "eta")
+        super(FreeShearHighRes256Env, self).__init__(
+            executable="/home/yiqi/PycharmProjects/RL2D/solvers/ALPACA_32_TENO5RL_ETA",
+            inputfile="shear_256",
+            parameters=paras,
+            observation_space=spaces.Box(low=-1.0, high=1.0, shape=(len(layers), 64, 64), dtype=np.float32),
+            action_space=spaces.Box(low=action_bound[0], high=action_bound[1], shape=(len(paras), ), dtype=np.float32),
+            timestep_size=0.01,
+            time_span=2.0,
+            baseline_data_loc="/home/yiqi/PycharmProjects/RL2D/baseline/shear_64_weno5",
+            linked_reset=False,
+            high_res=(True, 4),
+            cpu_num=6,
+            layers=layers,
+            config=config
+        )
+
+    def get_reward(self, end_time):
+        return 0
