@@ -1,6 +1,6 @@
 import os
 from abc import ABC, abstractmethod
-
+from typing import Callable
 import gym
 from gym import spaces
 import numpy as np
@@ -30,6 +30,7 @@ class AlpacaEnv(gym.Env, ABC):
             timestep_size: float,
             time_span: float,
             baseline_data_loc: str,
+            get_state_func: Callable,
             linked_reset: bool = True,
             high_res: tuple = (False, None),
             cpu_num: int = 1,
@@ -58,6 +59,7 @@ class AlpacaEnv(gym.Env, ABC):
             baseline_data_loc=baseline_data_loc,
             linked_reset=linked_reset,
             high_res=high_res,
+            get_state_func=get_state_func,
             cpu_num=cpu_num,
             schemefile=schemefile,
             layers=layers,
@@ -76,6 +78,7 @@ class AlpacaEnv(gym.Env, ABC):
             baseline_data_loc: str,
             linked_reset: bool,
             high_res: tuple,
+            get_state_func: Callable,
             cpu_num: int,
             schemefile: str,
             layers: list,
@@ -97,6 +100,7 @@ class AlpacaEnv(gym.Env, ABC):
             data_loc=baseline_data_loc,
             layers=layers,
             high_res=high_res,
+            get_state_func=get_state_func,
             config=config
         )
         objective = SimulationHandler(
