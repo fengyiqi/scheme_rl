@@ -10,7 +10,7 @@ class RiemannConfig3Env(AlpacaEnv):
         config = {
             "smoothness_threshold": 0.15
         }
-        layers = ["density", "kinetic_energy", "pressure"]
+        layers = ["density", "velocity", "pressure"]
         paras = ("q", "cq", "eta")
         super(RiemannConfig3Env, self).__init__(
             executable="/home/yiqi/PycharmProjects/RL2D/solvers/ALPACA_32_TENO5RL_ETA",
@@ -39,7 +39,7 @@ class RiemannConfig3Env(AlpacaEnv):
             # smoothness improvement
             reward_si = self.obj.get_dispersive_penalty(end_time)
             si_improve = True if reward_si > 0 else False
-            si_penalty = abs(np.min((reward_si, 0))) ** 1.9
+            si_penalty = abs(np.min((reward_si, 0))) ** 2.2
             # since we modify Gaussian to SquashedGaussian, we don't need action penalty anymore.
             # modify sb3/common/distributions/line 661, DiagGaussianDistribution to SquashedDiagGaussianDistribution
             quality = (reward_ke - si_penalty)
