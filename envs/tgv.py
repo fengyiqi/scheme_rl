@@ -4,6 +4,7 @@ from .env_base import AlpacaEnv
 from gym import spaces
 from .sim_base import action_bound
 from .utils import normalize
+import os
 
 
 _zero_mean = True
@@ -12,71 +13,74 @@ _zero_mean = True
 def _get_states(data_obj, layers=None, zero_mean=_zero_mean, ave_pool=None):
     assert zero_mean, "Non-zeromean has not been implemented"
     if layers is None:
-        layers = ["density", "velocity_x", "velocity_y", "pressure"]
+        layers = ["density", "velocity_x", "velocity_y", "velocity_z", "pressure"]
     state_matrix = []
     for state in layers:
         state_dist = data_obj.result[state]
-        if ave_pool is not None and state_dist.shape != (64, 64):
-            state_dist = torch.nn.AvgPool2d(ave_pool)(torch.tensor(np.expand_dims(state_dist, axis=0)))[0].numpy()
-        if state == "velocity_x" or state == "velocity_y":
+        if ave_pool is not None and state_dist.shape != (16, 16, 16):
+            state_dist = torch.nn.AvgPool3d(ave_pool)(torch.tensor(np.expand_dims(state_dist, axis=0)))[0].numpy()
+        if state == "density" or state == "velocity_z":
             if round(np.max(state_dist) - np.min(state_dist), 6) < 1e-6:
-                value = np.zeros_like(state_dist) if zero_mean else np.zeros_like(state_dist) + 0.5
+                value = np.zeros_like(state_dist)
             else:
-                value_positive = np.where(state_dist > 0, state_dist, 0)
-                value_positive = normalize(value=value_positive, bounds=(value_positive.min(), value_positive.max()))
-                value_negative = np.abs(np.where(state_dist <= 0, state_dist, 0))
-                value_negative = - normalize(value=value_negative, bounds=(value_negative.min(), value_negative.max()))
-                value = value_negative + value_positive
+                value = normalize(value=state_dist, bounds=(state_dist.min(), state_dist.max()))
+                value = value - 0.5
         else:
             value = normalize(value=state_dist, bounds=(state_dist.min(), state_dist.max()))
-            value = value - 0.5 if zero_mean else value
+            value = value - 0.5
         state_matrix.append(value)
+
     return state_matrix
 
 
-class ImplosionEnv(AlpacaEnv):
+class TaylorGreenVortexEnv(AlpacaEnv):
 
     def __init__(self):
         config = {
             "smoothness_threshold": 0.33
         }
-        layers = ["density", "velocity_x", "velocity_y", "pressure"]
+        layers = ["density", "velocity_x", "velocity_y", "velocity_z", "pressure"]
         paras = ("q", "cq", "eta")
-        super(ImplosionEnv, self).__init__(
-            executable="/home/yiqi/PycharmProjects/RL2D/solvers/ALPACA_32_TENO5RL_ETA",
+        super(TaylorGreenVortexEnv, self).__init__(
+            executable="/home/yiqi/PycharmProjects/RL2D/solvers/ALPACA_3D8_TENO5RL_ETA",  # Note that we use HLLC
             schemefile="/home/yiqi/PycharmProjects/RL2D/runtime_data/scheme.xml",
-            inputfile="implosion_64",
+            inputfile="tgv_16",
             parameters=paras,
-            observation_space=spaces.Box(low=-1.0, high=1.0, shape=(len(layers), 64, 64), dtype=np.float32),
+            observation_space=spaces.Box(low=-1.0, high=1.0, shape=(len(layers), 16, 16, 16), dtype=np.float32),
             action_space=spaces.Box(low=action_bound[0], high=action_bound[1], shape=(len(paras), ), dtype=np.float32),
-            timestep_size=0.01,
-            time_span=2.5,
-            baseline_data_loc="/home/yiqi/PycharmProjects/RL2D/baseline/implosion_64_weno5",
+            timestep_size=0.05,
+            time_span=10.0,
+            baseline_data_loc="/home/yiqi/PycharmProjects/RL2D/baseline/tgv_16_weno5",
             linked_reset=False,
             high_res=(False, None),
             get_state_func=_get_states,
             cpu_num=4,
+            dimension=3,
             layers=layers,
             config=config
         )
 
     def get_reward(self, end_time):
         if self.obj.is_crashed:
-            return -10
+            return -100
         else:
             # kinetic energy improvement
-            reward_ke = self.obj.get_ke_reward(end_time=end_time)
+            reward_ke = self.obj.get_ke_reward(end_time=end_time) / 5
             ke_improve = True if reward_ke > 0 else False
             # dispersion improvement
             reward_si = self.obj.get_dispersive_penalty(end_time=end_time)
-            si_penalty = abs(np.min((reward_si, 0)))**3.3
+            # si_penalty = abs(np.min((reward_si / 10, 0)))**4
+            si_penalty = 0
             si_improve = True if reward_si > 0 else False
             # since we modify Gaussian to SquashedGaussian, we don't need action penalty anymore.
             # modify sb3/common/distributions/line 661, DiagGaussianDistribution to SquashedDiagGaussianDistribution
 
             quality = reward_ke - si_penalty
             self.cumulative_quality += quality
-            total_reward = quality + .1
+            total_reward = (quality + 0.0)
+            # if end_time == "10.000":
+            #     obj_iles = self.obj.get_tke_reward()
+            #     total_reward += -10 * obj_iles
             self.cumulative_reward += total_reward
             if self.evaluation:
                 end_time = self.obj.time_controller.get_end_time_string()
@@ -90,28 +94,40 @@ class ImplosionEnv(AlpacaEnv):
                 self.debug.collect_info(f"quality: {round(quality, 3):<6}  ")
             return total_reward
 
+    def get_infos(self, end_time):
+        if end_time == "10.000":
+            tke_ori = self.obj.get_tke_reward()
+            obj_iles = - (tke_ori - 3)*1.5
+            if self.evaluation:
+                print("tke error: ", tke_ori)
+            return {"final_tke": obj_iles}
+        else:
+            return {}
 
-class ImplosionHighRes128Env(AlpacaEnv):
+
+class TaylorGreenVortexHighRes32Env(AlpacaEnv):
 
     def __init__(self):
         config = {
             "smoothness_threshold": 0.33
         }
-        layers = ["density", "velocity_x", "velocity_y", "pressure"]
+        layers = ["density", "velocity_x", "velocity_y", "velocity_z", "pressure"]
         paras = ("q", "cq", "eta")
-        super(ImplosionHighRes128Env, self).__init__(
-            executable="/home/yiqi/PycharmProjects/RL2D/solvers/ALPACA_32_TENO5RL_ETA",
-            inputfile="implosion_128",
+        super(TaylorGreenVortexHighRes32Env, self).__init__(
+            executable="/home/yiqi/PycharmProjects/RL2D/solvers/ALPACA_3D8_TENO5RL_ETA",  # Note that we use HLLC
+            schemefile="/home/yiqi/PycharmProjects/RL2D/runtime_data/scheme.xml",
+            inputfile="tgv_32",
             parameters=paras,
-            observation_space=spaces.Box(low=-1.0, high=1.0, shape=(len(layers), 64, 64), dtype=np.float32),
+            observation_space=spaces.Box(low=-1.0, high=1.0, shape=(len(layers), 16, 16, 16), dtype=np.float32),
             action_space=spaces.Box(low=action_bound[0], high=action_bound[1], shape=(len(paras), ), dtype=np.float32),
-            timestep_size=0.01,
-            time_span=2.5,
-            baseline_data_loc="/home/yiqi/PycharmProjects/RL2D/baseline/implosion_64_weno5",
+            timestep_size=0.05,
+            time_span=10.0,
+            baseline_data_loc="/home/yiqi/PycharmProjects/RL2D/baseline/tgv_16_weno5",
             linked_reset=False,
             high_res=(True, 2),
             get_state_func=_get_states,
             cpu_num=6,
+            dimension=3,
             layers=layers,
             config=config
         )
@@ -120,30 +136,35 @@ class ImplosionHighRes128Env(AlpacaEnv):
         return 0
 
 
-class ImplosionHighRes256Env(AlpacaEnv):
+class TaylorGreenVortexHighRes64Env(AlpacaEnv):
 
     def __init__(self):
         config = {
             "smoothness_threshold": 0.33
         }
-        layers = ["density", "velocity_x", "velocity_y", "pressure"]
+        layers = ["density", "velocity_x", "velocity_y", "velocity_z", "pressure"]
         paras = ("q", "cq", "eta")
-        super(ImplosionHighRes256Env, self).__init__(
-            executable="/home/yiqi/PycharmProjects/RL2D/solvers/ALPACA_32_TENO5RL_ETA",
-            inputfile="implosion_256",
+        super(TaylorGreenVortexHighRes64Env, self).__init__(
+            executable="/home/yiqi/PycharmProjects/RL2D/solvers/ALPACA_3D8_TENO5RL_ETA",  # Note that we use HLLC
+            schemefile="/home/yiqi/PycharmProjects/RL2D/runtime_data/scheme.xml",
+            inputfile="tgv_64",
             parameters=paras,
-            observation_space=spaces.Box(low=-1.0, high=1.0, shape=(len(layers), 64, 64), dtype=np.float32),
+            observation_space=spaces.Box(low=-1.0, high=1.0, shape=(len(layers), 16, 16, 16), dtype=np.float32),
             action_space=spaces.Box(low=action_bound[0], high=action_bound[1], shape=(len(paras), ), dtype=np.float32),
-            timestep_size=0.01,
-            time_span=2.5,
-            baseline_data_loc="/home/yiqi/PycharmProjects/RL2D/baseline/implosion_64_weno5",
+            timestep_size=0.05,
+            time_span=10.0,
+            baseline_data_loc="/home/yiqi/PycharmProjects/RL2D/baseline/tgv_16_weno5",
             linked_reset=False,
             high_res=(True, 4),
             get_state_func=_get_states,
-            cpu_num=6,
+            cpu_num=7,
+            dimension=3,
             layers=layers,
             config=config
         )
 
     def get_reward(self, end_time):
+        if float(end_time) > 0.1:
+            last_last_time = float(end_time) - 0.1
+            os.system(f"rm -rf ~/PycharmProjects/RL2D/runtime_data/tgv_64_{format(last_last_time, '.3f')}")
         return 0

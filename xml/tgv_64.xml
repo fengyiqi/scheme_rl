@@ -4,13 +4,13 @@
 <configuration>
     <domain>
         <!-- size of a single node on level 0 -->
-        <nodeSize> 1.57079632679 </nodeSize>
+        <nodeSize> 0.78539816339 </nodeSize>
 
         <!-- number of nodes per dimension-->
         <nodeRatio>
-            <x> 4 </x>
-            <y> 4 </y>
-            <z> 4 </z>
+            <x> 8 </x>
+            <y> 8 </y>
+            <z> 8 </z>
         </nodeRatio>
 
         <boundaryConditions>
@@ -100,7 +100,7 @@
    <timeControl>
       <startTime> 0.0  </startTime>
       <endTime>   10.0  </endTime>
-      <CFLNumber> 0.6 </CFLNumber>
+      <CFLNumber> 0.9 </CFLNumber>
    </timeControl>
 
    <dimensionalization>

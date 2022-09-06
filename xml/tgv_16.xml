@@ -118,7 +118,10 @@
       <snapshots>
          <type> off </type> <!-- Off, Stamps, Interval OR Stamps Interval -->
          <interval> 3600 </interval> <!-- in wall seconds -->
-         <intervalsToKeep> 2 </intervalsToKeep> 
+         <intervalsToKeep> 2 </intervalsToKeep>
+          <stamps>
+             <ts1>1.200</ts1>
+         </stamps>
       </snapshots>
    </restart>
 

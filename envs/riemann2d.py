@@ -2,6 +2,27 @@ import numpy as np
 from .env_base import AlpacaEnv
 from gym import spaces
 from .sim_base import action_bound
+import torch
+from .utils import normalize
+
+_zero_mean = True
+
+
+def _get_states(data_obj, layers=None, zero_mean=_zero_mean, ave_pool=None):
+    if layers is None:
+        layers = ["density", "velocity_x", "velocity_y", "pressure"]
+    state_matrix = []
+    for state in layers:
+        state_dist = data_obj.result[state]
+        if ave_pool is not None and state_dist.shape != (64, 64):
+            state_dist = torch.nn.AvgPool2d(ave_pool)(torch.tensor(np.expand_dims(state_dist, axis=0)))[0].numpy()
+        if np.max(state_dist) - np.min(state_dist) < 1e-6:
+            value = np.zeros_like(state_dist) if zero_mean else np.zeros_like(state_dist) + 0.5
+        else:
+            value = normalize(value=state_dist, bounds=(state_dist.min(), state_dist.max()))
+            value = value - 0.5 if zero_mean else value
+        state_matrix.append(value)
+    return state_matrix
 
 
 class RiemannConfig3Env(AlpacaEnv):
@@ -10,7 +31,7 @@ class RiemannConfig3Env(AlpacaEnv):
         config = {
             "smoothness_threshold": 0.15
         }
-        layers = ["density", "velocity", "pressure"]
+        layers = ["density", "velocity_x", "velocity_y", "pressure"]
         paras = ("q", "cq", "eta")
         super(RiemannConfig3Env, self).__init__(
             executable="/home/yiqi/PycharmProjects/RL2D/solvers/ALPACA_32_TENO5RL_ETA",
@@ -21,9 +42,10 @@ class RiemannConfig3Env(AlpacaEnv):
             action_space=spaces.Box(low=action_bound[0], high=action_bound[1], shape=(len(paras), ), dtype=np.float32),
             timestep_size=0.01,
             time_span=1.0,
-            baseline_data_loc="/home/yiqi/PycharmProjects/RL2D/baseline/config3_64_weno5",
+            baseline_data_loc="/media/yiqi/Fengyiqi/TUM/RL/baseline/config3_64_weno5",
             linked_reset=False,
             high_res=(False, None),
+            get_state_func=_get_states,
             cpu_num=4,
             layers=layers,
             config=config
@@ -39,12 +61,12 @@ class RiemannConfig3Env(AlpacaEnv):
             # smoothness improvement
             reward_si = self.obj.get_dispersive_penalty(end_time)
             si_improve = True if reward_si > 0 else False
-            si_penalty = abs(np.min((reward_si, 0))) ** 2.2
+            si_penalty = abs(np.min((reward_si, 0))) ** 2.4
             # since we modify Gaussian to SquashedGaussian, we don't need action penalty anymore.
             # modify sb3/common/distributions/line 661, DiagGaussianDistribution to SquashedDiagGaussianDistribution
             quality = (reward_ke - si_penalty)
             self.cumulative_quality += quality
-            total_reward = 10 * (quality + .02)
+            total_reward = 10 * (quality) # + .02)
             # if total_reward < 0:
             #     self.obj.done = True
             #     return -10
@@ -68,7 +90,7 @@ class RiemannConfig3HighRes128Env(AlpacaEnv):
         config = {
             "smoothness_threshold": 0.15
         }
-        layers = ["density", "kinetic_energy", "pressure"]
+        layers = ["density", "velocity_x", "velocity_y", "pressure"]
         paras = ("q", "cq", "eta")
         super(RiemannConfig3HighRes128Env, self).__init__(
             executable="/home/yiqi/PycharmProjects/RL2D/solvers/ALPACA_32_TENO5RL_ETA",
@@ -78,10 +100,11 @@ class RiemannConfig3HighRes128Env(AlpacaEnv):
             action_space=spaces.Box(low=action_bound[0], high=action_bound[1], shape=(len(paras), ), dtype=np.float32),
             timestep_size=0.01,
             time_span=1.0,
-            baseline_data_loc="/home/yiqi/PycharmProjects/RL2D/baseline/config3_64_weno5",
+            baseline_data_loc="/media/yiqi/Fengyiqi/TUM/RL/baseline/config3_64_weno5",
             linked_reset=False,
             high_res=(True, 2),
-            cpu_num=4,
+            get_state_func=_get_states,
+            cpu_num=6,
             layers=layers,
             config=config
         )
@@ -96,7 +119,7 @@ class RiemannConfig3HighRes256Env(AlpacaEnv):
         config = {
             "smoothness_threshold": 0.15
         }
-        layers = ["density", "kinetic_energy", "pressure"]
+        layers = ["density", "velocity_x", "velocity_y", "pressure"]
         paras = ("q", "cq", "eta")
         super(RiemannConfig3HighRes256Env, self).__init__(
             executable="/home/yiqi/PycharmProjects/RL2D/solvers/ALPACA_32_TENO5RL_ETA",
@@ -106,9 +129,10 @@ class RiemannConfig3HighRes256Env(AlpacaEnv):
             action_space=spaces.Box(low=action_bound[0], high=action_bound[1], shape=(len(paras), ), dtype=np.float32),
             timestep_size=0.01,
             time_span=1.0,
-            baseline_data_loc="/home/yiqi/PycharmProjects/RL2D/baseline/config3_64_weno5",
+            baseline_data_loc="/media/yiqi/Fengyiqi/TUM/RL/baseline/config3_64_weno5",
             linked_reset=False,
             high_res=(True, 4),
+            get_state_func=_get_states,
             cpu_num=6,
             layers=layers,
             config=config
@@ -124,7 +148,7 @@ class RiemannConfig3HighRes512Env(AlpacaEnv):
         config = {
             "smoothness_threshold": 0.15
         }
-        layers = ["density", "kinetic_energy", "pressure"]
+        layers = ["density", "velocity_x", "velocity_y", "pressure"]
         paras = ("q", "cq", "eta")
         super(RiemannConfig3HighRes512Env, self).__init__(
             executable="/home/yiqi/PycharmProjects/RL2D/solvers/ALPACA_32_TENO5RL_ETA",
@@ -134,9 +158,10 @@ class RiemannConfig3HighRes512Env(AlpacaEnv):
             action_space=spaces.Box(low=action_bound[0], high=action_bound[1], shape=(len(paras), ), dtype=np.float32),
             timestep_size=0.01,
             time_span=1.0,
-            baseline_data_loc="/home/yiqi/PycharmProjects/RL2D/baseline/config3_64_weno5",
+            baseline_data_loc="/media/yiqi/Fengyiqi/TUM/RL/baseline/config3_64_weno5",
             linked_reset=False,
             high_res=(True, 8),
+            get_state_func=_get_states,
             cpu_num=6,
             layers=layers,
             config=config

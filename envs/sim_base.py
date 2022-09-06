@@ -3,6 +3,8 @@ import numpy as np
 
 import xml.etree.ElementTree as ET
 from boiles.objective.simulation2d import Simulation2D
+# from boiles.objective.simulation3d import Simulation3D
+from boiles.objective.tgv import TaylorGreenVortex
 import torch
 
 SM_PROP = "numerical_dissipation_rate"
@@ -125,6 +127,7 @@ class BaselineDataHandler:
             layers,
             high_res,
             get_state_func,
+            dimension = 2,
             config: dict = None
     ):
         super(BaselineDataHandler, self).__init__()
@@ -139,6 +142,7 @@ class BaselineDataHandler:
         self.high_res = high_res
         self.smoothness_threshold = config.get("smoothness_threshold", 0.33)
         self.get_state_func = get_state_func
+        self.simulation_reader = Simulation2D if dimension == 2 else TaylorGreenVortex
         self.states = self.get_all_states()
         self.initial_state = self.get_initial_state()
         # self.smoothness = self.get_all_baseline_smoothness_reward()
@@ -154,7 +158,7 @@ class BaselineDataHandler:
         states = {}
         for timestep in np.arange(0, self.end_time, self.timestep_size):
             end_time = format(timestep, ".3f")
-            data_obj = Simulation2D(file=os.path.join(self.state_data_loc, f"data_{end_time}*.h5"))
+            data_obj = self.simulation_reader(file=os.path.join(self.state_data_loc, f"data_{end_time}*.h5"))
             states[end_time] = self.get_state_func(data_obj=data_obj, layers=self.layers, ave_pool=self.high_res[1])
             if self.high_res[0]:
                 break
@@ -176,7 +180,7 @@ class BaselineDataHandler:
         rewards = {}
         for timestep in np.arange(0, self.end_time + 1e-6, self.timestep_size):
             end_time = format(timestep, ".3f")
-            data_obj = Simulation2D(file=os.path.join(self.state_data_loc, f"data_{end_time}*.h5"))
+            data_obj = self.simulation_reader(file=os.path.join(self.state_data_loc, f"data_{end_time}*.h5"))
             _, rewards[end_time] = data_obj.smoothness(threshold=self.smoothness_threshold, property=SM_PROP)
         return rewards
 
@@ -186,7 +190,7 @@ class BaselineDataHandler:
         rewards = {}
         for timestep in np.arange(0, self.end_time + 1e-6, self.timestep_size):
             end_time = format(timestep, ".3f")
-            data_obj = Simulation2D(file=os.path.join(self.state_data_loc, f"data_{end_time}*.h5"))
+            data_obj = self.simulation_reader(file=os.path.join(self.state_data_loc, f"data_{end_time}*.h5"))
             _, _, rewards[end_time], _ = data_obj.truncation_errors()
         return rewards
 
@@ -196,7 +200,7 @@ class BaselineDataHandler:
         rewards = {}
         for timestep in np.arange(0, self.end_time + 1e-6, self.timestep_size):
             end_time = format(timestep, ".3f")
-            data_obj = Simulation2D(file=os.path.join(self.state_data_loc, f"data_{end_time}*.h5"))
+            data_obj = self.simulation_reader(file=os.path.join(self.state_data_loc, f"data_{end_time}*.h5"))
             _, rewards[end_time], _, _ = data_obj.truncation_errors()
         return rewards
 
@@ -206,7 +210,7 @@ class BaselineDataHandler:
         rewards = {}
         for timestep in np.arange(0, self.end_time + 1e-6, self.timestep_size):
             end_time = format(timestep, ".3f")
-            data_obj = Simulation2D(file=os.path.join(self.state_data_loc, f"data_{end_time}*.h5"))
+            data_obj = self.simulation_reader(file=os.path.join(self.state_data_loc, f"data_{end_time}*.h5"))
             rewards[end_time] = data_obj.result["kinetic_energy"].sum()
         return rewards
 
@@ -216,7 +220,7 @@ class BaselineDataHandler:
         rewards = {}
         for timestep in np.arange(0, self.end_time + 1e-6, self.timestep_size):
             end_time = format(timestep, ".3f")
-            data_obj = Simulation2D(file=os.path.join(self.state_data_loc, f"data_{end_time}*.h5"))
+            data_obj = self.simulation_reader(file=os.path.join(self.state_data_loc, f"data_{end_time}*.h5"))
             rewards[end_time] = data_obj.result["vorticity"].sum()
         return rewards
 
@@ -226,7 +230,7 @@ class BaselineDataHandler:
         rewards = {}
         for timestep in np.arange(0, self.end_time + 1e-6, self.timestep_size):
             end_time = format(timestep, ".3f")
-            data_obj = Simulation2D(file=os.path.join(self.state_data_loc, f"data_{end_time}*.h5"))
+            data_obj = self.simulation_reader(file=os.path.join(self.state_data_loc, f"data_{end_time}*.h5"))
             rewards[end_time] = np.where(data_obj.result["vorticity"] > 1, 0, data_obj.result["vorticity"]).sum()
         return rewards
 
@@ -236,7 +240,7 @@ class BaselineDataHandler:
         rewards = {}
         for timestep in np.arange(0, self.end_time + 1e-6, self.timestep_size):
             end_time = format(timestep, ".3f")
-            data_obj = Simulation2D(file=os.path.join(self.state_data_loc, f"data_{end_time}*.h5"))
+            data_obj = self.simulation_reader(file=os.path.join(self.state_data_loc, f"data_{end_time}*.h5"))
             rewards[end_time] = data_obj._create_spectrum()[32:, 1].sum()
         return rewards
 
@@ -246,7 +250,7 @@ class BaselineDataHandler:
         upperbound = {}
         for timestep in np.arange(0, self.end_time + 1e-6, self.timestep_size):
             end_time = format(timestep, ".3f")
-            teno5lin_data_obj = Simulation2D(file=f"/home/yiqi/PycharmProjects/RL2D/baseline/implosion_64_teno5lin/domain/data_{end_time}*.h5")
+            teno5lin_data_obj = self.simulation_reader(file=f"/home/yiqi/PycharmProjects/RL2D/baseline/implosion_64_teno5lin/domain/data_{end_time}*.h5")
             teno5lin_disper = abs(teno5lin_data_obj.truncation_errors()[1])
             upperbound[end_time] = teno5lin_disper / abs(self.dispersive[end_time])
         return upperbound
@@ -321,13 +325,16 @@ class SimulationHandler:
         return file
 
     def get_state(self, end_time):
-        self.current_data = Simulation2D(file=f"runtime_data/{self.inputfile}_{end_time}/domain/data_{end_time}*.h5")
+        self.current_data = self.baseline_data_obj.simulation_reader(file=f"runtime_data/{self.inputfile}_{end_time}/domain/data_{end_time}*.h5")
         if not self.current_data.result_exit:
             self.is_crashed = True
             self.done = True
             return self.baseline_data_obj.initial_state
         else:
             return self.baseline_data_obj.get_state_func(data_obj=self.current_data, layers=self.layers, ave_pool=self.high_res[1])
+
+    def get_tke_reward(self):
+        return self.current_data.objective_spectrum()
 
     def get_smoothness_reward(self, end_time):
         _, reward = self.current_data.smoothness(threshold=self.smoothness_threshold, property=SM_PROP)

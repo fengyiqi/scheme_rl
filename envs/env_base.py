@@ -34,6 +34,7 @@ class AlpacaEnv(gym.Env, ABC):
             linked_reset: bool = True,
             high_res: tuple = (False, None),
             cpu_num: int = 1,
+            dimension: int = 2,
             schemefile: str = "/home/yiqi/PycharmProjects/RL2D/runtime_data/scheme.xml",
             layers: list = None,
             config: dict = None
@@ -61,6 +62,7 @@ class AlpacaEnv(gym.Env, ABC):
             high_res=high_res,
             get_state_func=get_state_func,
             cpu_num=cpu_num,
+            dimension=dimension,
             schemefile=schemefile,
             layers=layers,
             config=config
@@ -80,6 +82,7 @@ class AlpacaEnv(gym.Env, ABC):
             high_res: tuple,
             get_state_func: Callable,
             cpu_num: int,
+            dimension: int,
             schemefile: str,
             layers: list,
             config: dict
@@ -101,6 +104,7 @@ class AlpacaEnv(gym.Env, ABC):
             layers=layers,
             high_res=high_res,
             get_state_func=get_state_func,
+            dimension=dimension,
             config=config
         )
         objective = SimulationHandler(
@@ -164,6 +168,7 @@ class AlpacaEnv(gym.Env, ABC):
         self.obj.run(inputfile=inputfile)
         current_state = self.obj.get_state(end_time=end_time)
         reward = self.get_reward(end_time=end_time)
+        infos = self.get_infos(end_time=end_time)
 
         if end_time == self.obj.time_controller.get_time_span_string():
             self.obj.done = True
@@ -171,12 +176,14 @@ class AlpacaEnv(gym.Env, ABC):
             self.debug.collect_scheme_paras()
             if PRINT_VERBOSE:
                 self.debug.flush_info()
-        return current_state, reward, self.obj.done, {}
+        return current_state, reward, self.obj.done, infos
 
     @abstractmethod
     def get_reward(self, end_time):
         return NotImplemented
 
+    def get_infos(self, end_time):
+        return {}
 
     def render(self, mode="human"):
         return NotImplemented

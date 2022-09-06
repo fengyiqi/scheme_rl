@@ -4,13 +4,13 @@
 <configuration>
     <domain>
         <!-- size of a single node on level 0 -->
-        <nodeSize> 3.14159265359 </nodeSize>
+        <nodeSize> 1.57079632679 </nodeSize>
 
         <!-- number of nodes per dimension-->
         <nodeRatio>
-            <x> 2 </x>
-            <y> 2 </y>
-            <z> 2 </z>
+            <x> 4 </x>
+            <y> 4 </y>
+            <z> 4 </z>
         </nodeRatio>
 
         <boundaryConditions>
