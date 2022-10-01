@@ -35,7 +35,7 @@ def _get_states(data_obj, layers=None, zero_mean=_zero_mean, ave_pool=None):
         state_matrix.append(value)
     return state_matrix
 
-
+ 
 class ImplosionEnv(AlpacaEnv):
 
     def __init__(self):
@@ -53,7 +53,7 @@ class ImplosionEnv(AlpacaEnv):
             action_space=spaces.Box(low=action_bound[0], high=action_bound[1], shape=(len(paras), ), dtype=np.float32),
             timestep_size=0.01,
             time_span=2.5,
-            baseline_data_loc="/media/yiqi/Fengyiqi/TUM/RL/baseline/implosion_64_weno5",
+            baseline_data_loc="/media/yiqi/Elements/RL/baseline/implosion_64_weno5",
             linked_reset=False,
             high_res=(False, None),
             get_state_func=_get_states,
@@ -64,19 +64,28 @@ class ImplosionEnv(AlpacaEnv):
 
     def get_reward(self, end_time):
         if self.obj.is_crashed:
-            return -10
+            return -100
         else:
             # kinetic energy improvement
             reward_ke = self.obj.get_ke_reward(end_time=end_time)
             ke_improve = True if reward_ke > 0 else False
-            # dispersion improvement
-            reward_si = self.obj.get_dispersive_penalty(end_time=end_time)
-            si_penalty = abs(np.min((reward_si, 0)))**3.3
+            # # dispersion improvement
+            # reward_si = self.obj.get_dispersive_penalty(end_time=end_time)
+            reward_si = self.obj.get_dispersive_to_highorder_baseline_penalty(end_time=end_time)
+            si_penalty = abs(np.min((reward_si, 0))) * 0.005216
+            si_penalty = si_penalty**0.6
+            # if si_penalty > 1:
+            #     si_penalty = si_penalty
+            # else:
+            #     si_penalty = si_penalty**2
             si_improve = True if reward_si > 0 else False
             # since we modify Gaussian to SquashedGaussian, we don't need action penalty anymore.
             # modify sb3/common/distributions/line 661, DiagGaussianDistribution to SquashedDiagGaussianDistribution
+            # trunc_reward = self.obj.get_truncation_reward(end_time=end_time)
+            # trunc_improve = True if trunc_reward > 0 else False
 
             quality = reward_ke - si_penalty
+            # quality = trunc_reward
             self.cumulative_quality += quality
             total_reward = quality # + .1
             self.cumulative_reward += total_reward
@@ -109,7 +118,7 @@ class ImplosionHighRes128Env(AlpacaEnv):
             action_space=spaces.Box(low=action_bound[0], high=action_bound[1], shape=(len(paras), ), dtype=np.float32),
             timestep_size=0.01,
             time_span=2.5,
-            baseline_data_loc="/home/yiqi/PycharmProjects/RL2D/baseline/implosion_64_weno5",
+            baseline_data_loc="/media/yiqi/Elements/RL/baseline/implosion_64_weno5",
             linked_reset=False,
             high_res=(True, 2),
             get_state_func=_get_states,
@@ -138,7 +147,7 @@ class ImplosionHighRes256Env(AlpacaEnv):
             action_space=spaces.Box(low=action_bound[0], high=action_bound[1], shape=(len(paras), ), dtype=np.float32),
             timestep_size=0.01,
             time_span=2.5,
-            baseline_data_loc="/home/yiqi/PycharmProjects/RL2D/baseline/implosion_64_weno5",
+            baseline_data_loc="/media/yiqi/Elements/RL/baseline/implosion_64_weno5",
             linked_reset=False,
             high_res=(True, 4),
             get_state_func=_get_states,

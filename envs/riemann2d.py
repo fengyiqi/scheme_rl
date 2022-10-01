@@ -20,7 +20,7 @@ def _get_states(data_obj, layers=None, zero_mean=_zero_mean, ave_pool=None):
             value = np.zeros_like(state_dist) if zero_mean else np.zeros_like(state_dist) + 0.5
         else:
             value = normalize(value=state_dist, bounds=(state_dist.min(), state_dist.max()))
-            value = value - 0.5 if zero_mean else value
+            value = value - value.mean() if zero_mean else value
         state_matrix.append(value)
     return state_matrix
 
@@ -42,7 +42,7 @@ class RiemannConfig3Env(AlpacaEnv):
             action_space=spaces.Box(low=action_bound[0], high=action_bound[1], shape=(len(paras), ), dtype=np.float32),
             timestep_size=0.01,
             time_span=1.0,
-            baseline_data_loc="/media/yiqi/Fengyiqi/TUM/RL/baseline/config3_64_weno5",
+            baseline_data_loc="/media/yiqi/Elements/RL/baseline/config3_64_weno5",
             linked_reset=False,
             high_res=(False, None),
             get_state_func=_get_states,
@@ -61,7 +61,7 @@ class RiemannConfig3Env(AlpacaEnv):
             # smoothness improvement
             reward_si = self.obj.get_dispersive_penalty(end_time)
             si_improve = True if reward_si > 0 else False
-            si_penalty = abs(np.min((reward_si, 0))) ** 2.4
+            si_penalty = abs(np.min((reward_si, 0))) ** 2.3
             # since we modify Gaussian to SquashedGaussian, we don't need action penalty anymore.
             # modify sb3/common/distributions/line 661, DiagGaussianDistribution to SquashedDiagGaussianDistribution
             quality = (reward_ke - si_penalty)
@@ -100,7 +100,7 @@ class RiemannConfig3HighRes128Env(AlpacaEnv):
             action_space=spaces.Box(low=action_bound[0], high=action_bound[1], shape=(len(paras), ), dtype=np.float32),
             timestep_size=0.01,
             time_span=1.0,
-            baseline_data_loc="/media/yiqi/Fengyiqi/TUM/RL/baseline/config3_64_weno5",
+            baseline_data_loc="/media/yiqi/Elements/RL/baseline/config3_64_weno5",
             linked_reset=False,
             high_res=(True, 2),
             get_state_func=_get_states,
@@ -129,7 +129,7 @@ class RiemannConfig3HighRes256Env(AlpacaEnv):
             action_space=spaces.Box(low=action_bound[0], high=action_bound[1], shape=(len(paras), ), dtype=np.float32),
             timestep_size=0.01,
             time_span=1.0,
-            baseline_data_loc="/media/yiqi/Fengyiqi/TUM/RL/baseline/config3_64_weno5",
+            baseline_data_loc="/media/yiqi/Elements/RL/baseline/config3_64_weno5",
             linked_reset=False,
             high_res=(True, 4),
             get_state_func=_get_states,
@@ -158,7 +158,7 @@ class RiemannConfig3HighRes512Env(AlpacaEnv):
             action_space=spaces.Box(low=action_bound[0], high=action_bound[1], shape=(len(paras), ), dtype=np.float32),
             timestep_size=0.01,
             time_span=1.0,
-            baseline_data_loc="/media/yiqi/Fengyiqi/TUM/RL/baseline/config3_64_weno5",
+            baseline_data_loc="/media/yiqi/Elements/RL/baseline/config3_64_weno5",
             linked_reset=False,
             high_res=(True, 8),
             get_state_func=_get_states,

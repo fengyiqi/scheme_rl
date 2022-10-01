@@ -148,6 +148,7 @@ class BaselineDataHandler:
         # self.smoothness = self.get_all_baseline_smoothness_reward()
         # self.truncation = self.get_all_baseline_truncation_reward()
         self.kinetic = self.get_all_baseline_ke_reward()
+        self.highorder_dissipation_rate = self.get_all_baseline_highorder_dissipation_rate()
         # self.vorticity = self.get_all_baseline_vor_reward()
         # self.cutoff_tke = self.get_all_baseline_cutoff_tke_reward()
         # self.cutoff_vor = self.get_all_baseline_cutoff_vor_reward()
@@ -203,6 +204,16 @@ class BaselineDataHandler:
             data_obj = self.simulation_reader(file=os.path.join(self.state_data_loc, f"data_{end_time}*.h5"))
             _, rewards[end_time], _, _ = data_obj.truncation_errors()
         return rewards
+
+    def get_all_baseline_highorder_dissipation_rate(self):
+        if self.high_res[0]:
+            return None
+        rate = {}
+        for timestep in np.arange(0, self.end_time + 1e-6, self.timestep_size):
+            end_time = format(timestep, ".3f")
+            data_obj = self.simulation_reader(file=os.path.join(self.state_data_loc, f"data_{end_time}*.h5"))
+            rate[end_time] = data_obj.result["highorder_dissipation_rate"]
+        return rate
 
     def get_all_baseline_ke_reward(self):
         if self.high_res[0]:
@@ -352,6 +363,17 @@ class SimulationHandler:
         _, reward, _, _ = self.current_data.truncation_errors()
         baseline_reward = self.baseline_data_obj.dispersive[end_time]
         improvement = 1 - reward / baseline_reward
+        return improvement
+
+    def get_dispersive_to_highorder_baseline_penalty(self, end_time):
+        eff_rate = self.current_data.result["effective_dissipation_rate"]
+        highorder_baseline_rate = self.baseline_data_obj.highorder_dissipation_rate[end_time]
+        trunc_to_baseline = highorder_baseline_rate - eff_rate
+        dispersion = np.where(trunc_to_baseline < 0, trunc_to_baseline, 0).sum()
+        baseline_dispersion = self.baseline_data_obj.dispersive[end_time]
+        # baseline_dispersion = 
+        # print(dispersion, baseline_dispersion)
+        improvement = 1 - abs(dispersion) / abs(baseline_dispersion)
         return improvement
 
     def get_dispersive_comparison(self, end_time):

@@ -64,7 +64,7 @@
       <numberOfMaterials> 1   </numberOfMaterials>
       <material1>
          <equationOfState>
-            <type> StiffenedGasSafe </type>
+            <type> StiffenedGas </type>
             <gamma>               1.4   </gamma>
             <A>                   0.0   </A>
             <B>                   0.0   </B>
