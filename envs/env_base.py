@@ -10,7 +10,8 @@ from .sim_base import (
     AlpacaExecutor,
     SimulationHandler,
     DebugProfileHandler,
-    BaselineDataHandler
+    BaselineDataHandler,
+    RANDOM_ROTATE
 )
 # from .sim_base import q_bound, cq_bound, eta_bound, ct_power_bound
 PRINT_VERBOSE = True
@@ -35,6 +36,7 @@ class AlpacaEnv(gym.Env, ABC):
             high_res: tuple = (False, None),
             cpu_num: int = 1,
             dimension: int = 2,
+            shape: tuple = None,
             schemefile: str = "/home/yiqi/PycharmProjects/RL2D/runtime_data/scheme.xml",
             layers: list = None,
             config: dict = None
@@ -51,6 +53,7 @@ class AlpacaEnv(gym.Env, ABC):
         self.cumulative_quality, self.cumulative_reward = 0, 0
         self.config = config
         self.linked_reset = linked_reset
+        self.shape = shape
         self.obj = self._build_objective(
             executable=executable,
             inputfile=inputfile,
@@ -63,6 +66,7 @@ class AlpacaEnv(gym.Env, ABC):
             get_state_func=get_state_func,
             cpu_num=cpu_num,
             dimension=dimension,
+            shape=shape,
             schemefile=schemefile,
             layers=layers,
             config=config
@@ -83,6 +87,7 @@ class AlpacaEnv(gym.Env, ABC):
             get_state_func: Callable,
             cpu_num: int,
             dimension: int,
+            shape: tuple,
             schemefile: str,
             layers: list,
             config: dict
@@ -105,6 +110,7 @@ class AlpacaEnv(gym.Env, ABC):
             high_res=high_res,
             get_state_func=get_state_func,
             dimension=dimension,
+            shape=shape,
             config=config
         )
         objective = SimulationHandler(
@@ -156,7 +162,13 @@ class AlpacaEnv(gym.Env, ABC):
         self.obj.time_controller.counter = 0
         self.obj.scheme_writer.last_net_action = (0, 0, 0)
         self.obj.is_crashed = False
-        return self.obj.baseline_data_obj.initial_state
+        state = self.obj.baseline_data_obj.initial_state.copy()
+        if not self.obj.high_res[0]:
+            if RANDOM_ROTATE:
+                times = np.random.choice([0, 1, 2, 3])
+                for i, s in enumerate(state):
+                    state[i] = np.rot90(s, k=times)
+        return state
 
     def step(self, action: list):
         assert self.action_space.contains(action), f"Invalid action! {action}"

@@ -46,7 +46,7 @@ class RiemannConfig3Env(AlpacaEnv):
             linked_reset=False,
             high_res=(False, None),
             get_state_func=_get_states,
-            cpu_num=4,
+            cpu_num=2,
             layers=layers,
             config=config
         )
@@ -59,14 +59,18 @@ class RiemannConfig3Env(AlpacaEnv):
             reward_ke = self.obj.get_ke_reward(end_time)
             ke_improve = True if reward_ke > 0 else False
             # smoothness improvement
-            reward_si = self.obj.get_dispersive_penalty(end_time)
-            si_improve = True if reward_si > 0 else False
-            si_penalty = abs(np.min((reward_si, 0))) ** 2.3
+            # reward_si = self.obj.get_dispersive_penalty(end_time)
+            reward_si = self.obj.get_dispersive_to_highorder_baseline_penalty(end_time=end_time)
+            
+            si_penalty = abs(np.min((reward_si, 0))) * 0.02454
+            # si_penalty = si_penalty**1
             # since we modify Gaussian to SquashedGaussian, we don't need action penalty anymore.
             # modify sb3/common/distributions/line 661, DiagGaussianDistribution to SquashedDiagGaussianDistribution
-            quality = (reward_ke - si_penalty)
+            si_improve = True if reward_si > 0 else False
+            quality = reward_ke - si_penalty
             self.cumulative_quality += quality
-            total_reward = 10 * (quality) # + .02)
+
+            total_reward = quality * 10 + 0.1
             # if total_reward < 0:
             #     self.obj.done = True
             #     return -10

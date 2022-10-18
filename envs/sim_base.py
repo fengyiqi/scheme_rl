@@ -5,13 +5,12 @@ import xml.etree.ElementTree as ET
 from boiles.objective.simulation2d import Simulation2D
 # from boiles.objective.simulation3d import Simulation3D
 from boiles.objective.tgv import TaylorGreenVortex
-import torch
 
 SM_PROP = "numerical_dissipation_rate"
-
-paras_range = dict(q=(1, 6), cq=(1, 100), eta=(0.2, 0.4), ct_power=(3, 15))
+RANDOM_ROTATE = False
+paras_range = dict(q=(1, 6), cq=(1, 20), eta=(0.2, 0.4), ct_power=(3, 15))
 paras_decimals = dict(q=0, cq=0, eta=4, ct_power=0)
-paras_default = dict(q=6, cq=1, eta=0.4, ct_power=5)
+paras_default = dict(q=6, cq=1, eta=0.4, ct_power=6)
 paras_index = dict(q=0, cq=1, eta=2, ct_power=3)
 
 action_bound = (-1, 1)
@@ -94,30 +93,6 @@ class AlpacaExecutor:
     def run_alpaca(self, inputfile):
         os.system(f"cd runtime_data; mpiexec -n {self.cpu_num} {self.executable} inputfiles/{inputfile}")
 
-
-# def _get_states(data_obj, layers=None, normalize_states=True, zero_mean=zero_mean, ave_pool=None):
-#     if layers is None:
-#         layers = ["density", "velocity", "pressure"]
-#     state_matrix = []
-#     for state in layers:
-#         if state == "velocity":
-#             value = np.sqrt(data_obj.result["velocity_x"]**2 + data_obj.result["velocity_y"]**2)
-#         # only for shear
-#         # elif state == "pressure":
-#         #     value = data_obj.result[state] / 100
-#         else:
-#             value = data_obj.result[state]
-#         if ave_pool is not None and value.shape != (64, 64):
-#             value = torch.nn.AvgPool2d(ave_pool)(torch.tensor(np.expand_dims(value, axis=0)))[0].numpy()
-#         if normalize_states:
-#             # only for shear
-#             if state != "density" and state != "pressure":
-#                 value = normalize(value=value, bounds=(value.min(), value.max()))
-#             value = value - 0.5 if zero_mean else value
-#         state_matrix.append(value)
-#     # print(state_matrix)
-#     return state_matrix
-
 class BaselineDataHandler:
     def __init__(
             self,
@@ -128,6 +103,7 @@ class BaselineDataHandler:
             high_res,
             get_state_func,
             dimension = 2,
+            shape = None,
             config: dict = None
     ):
         super(BaselineDataHandler, self).__init__()
@@ -143,6 +119,7 @@ class BaselineDataHandler:
         self.smoothness_threshold = config.get("smoothness_threshold", 0.33)
         self.get_state_func = get_state_func
         self.simulation_reader = Simulation2D if dimension == 2 else TaylorGreenVortex
+        self.shape = shape
         self.states = self.get_all_states()
         self.initial_state = self.get_initial_state()
         # self.smoothness = self.get_all_baseline_smoothness_reward()
@@ -159,7 +136,7 @@ class BaselineDataHandler:
         states = {}
         for timestep in np.arange(0, self.end_time, self.timestep_size):
             end_time = format(timestep, ".3f")
-            data_obj = self.simulation_reader(file=os.path.join(self.state_data_loc, f"data_{end_time}*.h5"))
+            data_obj = self.simulation_reader(file=os.path.join(self.state_data_loc, f"data_{end_time}*.h5"), shape=self.shape)
             states[end_time] = self.get_state_func(data_obj=data_obj, layers=self.layers, ave_pool=self.high_res[1])
             if self.high_res[0]:
                 break
@@ -173,6 +150,10 @@ class BaselineDataHandler:
         # if "velocity" in self.layers:
         #     index = self.layers.index("velocity")
         #     state[index] = np.zeros((64, 64))
+        # if RANDOM_ROTATE:
+        #     times = np.random.choice([0, 1, 2, 3])
+        #     for i, s in enumerate(state):
+        #         state[i] = np.rot90(s, k=times)
         return state
 
     def get_all_baseline_smoothness_reward(self):
@@ -181,7 +162,7 @@ class BaselineDataHandler:
         rewards = {}
         for timestep in np.arange(0, self.end_time + 1e-6, self.timestep_size):
             end_time = format(timestep, ".3f")
-            data_obj = self.simulation_reader(file=os.path.join(self.state_data_loc, f"data_{end_time}*.h5"))
+            data_obj = self.simulation_reader(file=os.path.join(self.state_data_loc, f"data_{end_time}*.h5"), shape=self.shape)
             _, rewards[end_time] = data_obj.smoothness(threshold=self.smoothness_threshold, property=SM_PROP)
         return rewards
 
@@ -191,7 +172,7 @@ class BaselineDataHandler:
         rewards = {}
         for timestep in np.arange(0, self.end_time + 1e-6, self.timestep_size):
             end_time = format(timestep, ".3f")
-            data_obj = self.simulation_reader(file=os.path.join(self.state_data_loc, f"data_{end_time}*.h5"))
+            data_obj = self.simulation_reader(file=os.path.join(self.state_data_loc, f"data_{end_time}*.h5"), shape=self.shape)
             _, _, rewards[end_time], _ = data_obj.truncation_errors()
         return rewards
 
@@ -201,7 +182,7 @@ class BaselineDataHandler:
         rewards = {}
         for timestep in np.arange(0, self.end_time + 1e-6, self.timestep_size):
             end_time = format(timestep, ".3f")
-            data_obj = self.simulation_reader(file=os.path.join(self.state_data_loc, f"data_{end_time}*.h5"))
+            data_obj = self.simulation_reader(file=os.path.join(self.state_data_loc, f"data_{end_time}*.h5"), shape=self.shape)
             _, rewards[end_time], _, _ = data_obj.truncation_errors()
         return rewards
 
@@ -211,7 +192,7 @@ class BaselineDataHandler:
         rate = {}
         for timestep in np.arange(0, self.end_time + 1e-6, self.timestep_size):
             end_time = format(timestep, ".3f")
-            data_obj = self.simulation_reader(file=os.path.join(self.state_data_loc, f"data_{end_time}*.h5"))
+            data_obj = self.simulation_reader(file=os.path.join(self.state_data_loc, f"data_{end_time}*.h5"), shape=self.shape)
             rate[end_time] = data_obj.result["highorder_dissipation_rate"]
         return rate
 
@@ -221,7 +202,7 @@ class BaselineDataHandler:
         rewards = {}
         for timestep in np.arange(0, self.end_time + 1e-6, self.timestep_size):
             end_time = format(timestep, ".3f")
-            data_obj = self.simulation_reader(file=os.path.join(self.state_data_loc, f"data_{end_time}*.h5"))
+            data_obj = self.simulation_reader(file=os.path.join(self.state_data_loc, f"data_{end_time}*.h5"), shape=self.shape)
             rewards[end_time] = data_obj.result["kinetic_energy"].sum()
         return rewards
 
@@ -231,7 +212,7 @@ class BaselineDataHandler:
         rewards = {}
         for timestep in np.arange(0, self.end_time + 1e-6, self.timestep_size):
             end_time = format(timestep, ".3f")
-            data_obj = self.simulation_reader(file=os.path.join(self.state_data_loc, f"data_{end_time}*.h5"))
+            data_obj = self.simulation_reader(file=os.path.join(self.state_data_loc, f"data_{end_time}*.h5"), shape=self.shape)
             rewards[end_time] = data_obj.result["vorticity"].sum()
         return rewards
 
@@ -241,7 +222,7 @@ class BaselineDataHandler:
         rewards = {}
         for timestep in np.arange(0, self.end_time + 1e-6, self.timestep_size):
             end_time = format(timestep, ".3f")
-            data_obj = self.simulation_reader(file=os.path.join(self.state_data_loc, f"data_{end_time}*.h5"))
+            data_obj = self.simulation_reader(file=os.path.join(self.state_data_loc, f"data_{end_time}*.h5"), shape=self.shape)
             rewards[end_time] = np.where(data_obj.result["vorticity"] > 1, 0, data_obj.result["vorticity"]).sum()
         return rewards
 
@@ -251,7 +232,7 @@ class BaselineDataHandler:
         rewards = {}
         for timestep in np.arange(0, self.end_time + 1e-6, self.timestep_size):
             end_time = format(timestep, ".3f")
-            data_obj = self.simulation_reader(file=os.path.join(self.state_data_loc, f"data_{end_time}*.h5"))
+            data_obj = self.simulation_reader(file=os.path.join(self.state_data_loc, f"data_{end_time}*.h5"), shape=self.shape)
             rewards[end_time] = data_obj._create_spectrum()[32:, 1].sum()
         return rewards
 
@@ -261,7 +242,7 @@ class BaselineDataHandler:
         upperbound = {}
         for timestep in np.arange(0, self.end_time + 1e-6, self.timestep_size):
             end_time = format(timestep, ".3f")
-            teno5lin_data_obj = self.simulation_reader(file=f"/home/yiqi/PycharmProjects/RL2D/baseline/implosion_64_teno5lin/domain/data_{end_time}*.h5")
+            teno5lin_data_obj = self.simulation_reader(file=f"/home/yiqi/PycharmProjects/RL2D/baseline/implosion_64_teno5lin/domain/data_{end_time}*.h5", shape=self.shape)
             teno5lin_disper = abs(teno5lin_data_obj.truncation_errors()[1])
             upperbound[end_time] = teno5lin_disper / abs(self.dispersive[end_time])
         return upperbound
@@ -336,13 +317,19 @@ class SimulationHandler:
         return file
 
     def get_state(self, end_time):
-        self.current_data = self.baseline_data_obj.simulation_reader(file=f"runtime_data/{self.inputfile}_{end_time}/domain/data_{end_time}*.h5")
+        self.current_data = self.baseline_data_obj.simulation_reader(file=f"runtime_data/{self.inputfile}_{end_time}/domain/data_{end_time}*.h5", shape=self.baseline_data_obj.shape)
         if not self.current_data.result_exit:
             self.is_crashed = True
             self.done = True
             return self.baseline_data_obj.initial_state
         else:
-            return self.baseline_data_obj.get_state_func(data_obj=self.current_data, layers=self.layers, ave_pool=self.high_res[1])
+            state = self.baseline_data_obj.get_state_func(data_obj=self.current_data, layers=self.layers, ave_pool=self.high_res[1])
+            if not self.high_res[0]:
+                if RANDOM_ROTATE:
+                    times = np.random.choice([0, 1, 2, 3])
+                    for i, s in enumerate(state):
+                        state[i] = np.rot90(s, k=times)
+            return state
 
     def get_tke_reward(self):
         return self.current_data.objective_spectrum()

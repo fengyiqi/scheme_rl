@@ -34,38 +34,39 @@ class RMIEnv(AlpacaEnv):
         layers = ["density", "velocity_x", "velocity_y", "pressure"]
         paras = ("q", "cq", "eta")
         super(RMIEnv, self).__init__(
-            executable="/home/yiqi/PycharmProjects/RL2D/solvers/ALPACA_32_TENO5RL_ETA_ROEM",
-            schemefile="/home/yiqi/PycharmProjects/RL2D/runtime_data/scheme.xml",
+            executable="/home/yiqi/PycharmProjects/RL2D2/solvers/ALPACA_32_TENO5RL_ETA_ROEM",
+            schemefile="/home/yiqi/PycharmProjects/RL2D2/runtime_data/scheme.xml",
             inputfile="rmi_64",
             parameters=paras,
             observation_space=spaces.Box(low=-1.0, high=1.0, shape=(len(layers), 64, 64), dtype=np.float32),
             action_space=spaces.Box(low=action_bound[0], high=action_bound[1], shape=(len(paras), ), dtype=np.float32),
             timestep_size=0.01,
             time_span=0.5,
-            baseline_data_loc="/media/yiqi/Elements/RL/baseline/rmi_64_weno5_roem",
+            baseline_data_loc="/media/yiqi/Elements/RL/baseline/rmi_64_weno5",
             linked_reset=False,
             high_res=(False, None),
             get_state_func=_get_states,
-            cpu_num=4,
+            cpu_num=2,
             layers=layers,
             config=config
         )
 
     def get_reward(self, end_time):
         if self.obj.is_crashed:
-            return -100
+            return -50
         else:
             reward_ke = self.obj.get_ke_reward(end_time)
             ke_improve = True if reward_ke > 0 else False
             # smoothness improvement
-            reward_si = self.obj.get_dispersive_penalty(end_time)
+            reward_si = self.obj.get_dispersive_to_highorder_baseline_penalty(end_time=end_time)
+            si_penalty = abs(np.min((reward_si, 0))) * 0.002926447275168
+            # si_penalty = si_penalty**0.95
             si_improve = True if reward_si > 0 else False
-            si_penalty = abs(np.min((reward_si, 0))) ** 3.1
             # since we modify Gaussian to SquashedGaussian, we don't need action penalty anymore.
             # modify sb3/common/distributions/line 661, DiagGaussianDistribution to SquashedDiagGaussianDistribution
-            quality = (reward_ke - si_penalty)
+            quality = reward_ke - si_penalty
             self.cumulative_quality += quality
-            total_reward = 10 * (quality)# + .050)
+            total_reward = 10 * quality + .4
             # if total_reward < 0:
             #     self.obj.done = True
             #     return -10
@@ -99,7 +100,7 @@ class RMIHighRes128Env(AlpacaEnv):
             action_space=spaces.Box(low=action_bound[0], high=action_bound[1], shape=(len(paras), ), dtype=np.float32),
             timestep_size=0.01,
             time_span=0.5,
-            baseline_data_loc="/media/yiqi/Elements/RL/baseline/rmi_64_weno5_roem",
+            baseline_data_loc="/media/yiqi/Elements/RL/baseline/rmi_64_weno5",
             linked_reset=False,
             high_res=(True, 2),
             get_state_func=_get_states,
@@ -128,7 +129,7 @@ class RMIHighRes256Env(AlpacaEnv):
             action_space=spaces.Box(low=action_bound[0], high=action_bound[1], shape=(len(paras), ), dtype=np.float32),
             timestep_size=0.01,
             time_span=0.5,
-            baseline_data_loc="/media/yiqi/Elements/RL/baseline/rmi_64_weno5_roem",
+            baseline_data_loc="/media/yiqi/Elements/RL/baseline/rmi_64_weno5",
             linked_reset=False,
             high_res=(True, 4),
             get_state_func=_get_states,
@@ -156,7 +157,7 @@ class RMIHighRes384Env(AlpacaEnv):
             action_space=spaces.Box(low=action_bound[0], high=action_bound[1], shape=(len(paras), ), dtype=np.float32),
             timestep_size=0.01,
             time_span=0.5,
-            baseline_data_loc="/media/yiqi/Elements/RL/baseline/rmi_64_weno5_roem",
+            baseline_data_loc="/media/yiqi/Elements/RL/baseline/rmi_64_weno5",
             linked_reset=False,
             high_res=(True, 6),
             get_state_func=_get_states,
@@ -185,7 +186,7 @@ class RMIHighRes512Env(AlpacaEnv):
             action_space=spaces.Box(low=action_bound[0], high=action_bound[1], shape=(len(paras), ), dtype=np.float32),
             timestep_size=0.01,
             time_span=0.5,
-            baseline_data_loc="/media/yiqi/Elements/RL/baseline/rmi_64_weno5_roem",
+            baseline_data_loc="/media/yiqi/Elements/RL/baseline/rmi_64_weno5",
             linked_reset=False,
             high_res=(True, 8),
             get_state_func=_get_states,

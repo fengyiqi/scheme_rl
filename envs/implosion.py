@@ -57,7 +57,7 @@ class ImplosionEnv(AlpacaEnv):
             linked_reset=False,
             high_res=(False, None),
             get_state_func=_get_states,
-            cpu_num=4,
+            cpu_num=2,
             layers=layers,
             config=config
         )
@@ -73,7 +73,7 @@ class ImplosionEnv(AlpacaEnv):
             # reward_si = self.obj.get_dispersive_penalty(end_time=end_time)
             reward_si = self.obj.get_dispersive_to_highorder_baseline_penalty(end_time=end_time)
             si_penalty = abs(np.min((reward_si, 0))) * 0.005216
-            si_penalty = si_penalty**0.6
+            # si_penalty = si_penalty**1
             # if si_penalty > 1:
             #     si_penalty = si_penalty
             # else:

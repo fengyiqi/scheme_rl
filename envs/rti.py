@@ -32,7 +32,7 @@ def _get_states(data_obj, layers=None, zero_mean=_zero_mean, ave_pool=None):
         state_matrix.append(value)
     return state_matrix
 
-class FreeShearEnv(AlpacaEnv):
+class RTIEnv(AlpacaEnv):
 
     def __init__(self):
         config = {
@@ -40,37 +40,36 @@ class FreeShearEnv(AlpacaEnv):
         }
         layers = ["density", "velocity_x", "velocity_y", "pressure"]
         paras = ("q", "cq", "eta")
-        super(FreeShearEnv, self).__init__(
-            executable="/home/yiqi/PycharmProjects/RL2D2/solvers/ALPACA_32_TENO5RL_ETA",
+        super(RTIEnv, self).__init__(
+            executable="/home/yiqi/PycharmProjects/RL2D2/solvers/ALPACA_32_TENO5RL_ETA_G",
             schemefile="/home/yiqi/PycharmProjects/RL2D2/runtime_data/scheme.xml",
-            inputfile="shear_64",
+            inputfile="rti_64",
             parameters=paras,
-            observation_space=spaces.Box(low=-1.0, high=1.0, shape=(len(layers), 64, 64), dtype=np.float32),
+            observation_space=spaces.Box(low=-1.0, high=1.0, shape=(len(layers), 256, 64), dtype=np.float32),
             action_space=spaces.Box(low=action_bound[0], high=action_bound[1], shape=(len(paras), ), dtype=np.float32),
             timestep_size=0.01,
-            time_span=1.0,
-            baseline_data_loc="/media/yiqi/Elements/RL/baseline/shear_64_weno5",
+            time_span=2.0,
+            baseline_data_loc="/media/yiqi/Elements/RL/baseline/rti_64_weno5",
             linked_reset=False,
             high_res=(False, None),
-            cpu_num=4,
+            cpu_num=6,
             get_state_func=_get_states,
+            shape=(256, 64),
             layers=layers,
             config=config
         )
 
     def get_reward(self, end_time):
         if self.obj.is_crashed:
-            return -100
+            return -50
         else:
 
-            reward_ke = self.obj.get_ke_reward(end_time=end_time) + 1
+            reward_ke = self.obj.get_ke_reward(end_time=end_time)
             ke_improve = True if reward_ke > 0 else False
             # # dispersion improvement
             # reward_si = self.obj.get_dispersive_penalty(end_time=end_time)
             reward_si = self.obj.get_dispersive_to_highorder_baseline_penalty(end_time=end_time)
-            # si_penalty = abs(np.min((reward_si, 0))) * 0.002515805362365
-            si_penalty = np.max((-reward_si, 0)) * 0.144169804342913 + 1
-
+            si_penalty = abs(np.min((reward_si, 0))) * 0.86973885923339
 
             # si_penalty = 0
             # si_penalty = si_penalty**1
@@ -87,7 +86,7 @@ class FreeShearEnv(AlpacaEnv):
             quality = reward_ke - si_penalty
             # quality = trunc_reward
             self.cumulative_quality += quality
-            total_reward = quality 
+            total_reward = quality + 0.1
             self.cumulative_reward += total_reward
             if self.evaluation:
                 end_time = self.obj.time_controller.get_end_time_string()
@@ -102,7 +101,7 @@ class FreeShearEnv(AlpacaEnv):
             return total_reward
 
 
-class FreeShearHighRes128Env(AlpacaEnv):
+class RTIHighRes128Env(AlpacaEnv):
 
     def __init__(self):
         config = {
@@ -110,19 +109,20 @@ class FreeShearHighRes128Env(AlpacaEnv):
         }
         layers = ["density", "velocity_x", "velocity_y", "pressure"]
         paras = ("q", "cq", "eta")
-        super(FreeShearHighRes128Env, self).__init__(
-            executable="/home/yiqi/PycharmProjects/RL2D2/solvers/ALPACA_32_TENO5RL_ETA_VOR",
+        super(RTIHighRes128Env, self).__init__(
+            executable="/home/yiqi/PycharmProjects/RL2D2/solvers/ALPACA_32_TENO5RL_ETA_G",
             schemefile="/home/yiqi/PycharmProjects/RL2D2/runtime_data/scheme.xml",
-            inputfile="shear_128",
+            inputfile="rti_128",
             parameters=paras,
-            observation_space=spaces.Box(low=-1.0, high=1.0, shape=(len(layers), 64, 64), dtype=np.float32),
+            observation_space=spaces.Box(low=-1.0, high=1.0, shape=(len(layers), 256, 64), dtype=np.float32),
             action_space=spaces.Box(low=action_bound[0], high=action_bound[1], shape=(len(paras), ), dtype=np.float32),
             timestep_size=0.01,
-            time_span=1.0,
-            baseline_data_loc="/media/yiqi/Elements/RL/baseline//shear_64_weno5",
+            time_span=2.0,
+            baseline_data_loc="/media/yiqi/Elements/RL/baseline/rti_128_weno5",
             linked_reset=False,
             high_res=(True, 2),
             cpu_num=6,
+            shape=(512, 128),
             get_state_func=_get_states,
             layers=layers,
             config=config
@@ -132,7 +132,7 @@ class FreeShearHighRes128Env(AlpacaEnv):
         return 0
 
 
-class FreeShearHighRes256Env(AlpacaEnv):
+class RTIHighRes256Env(AlpacaEnv):
 
     def __init__(self):
         config = {
@@ -140,19 +140,20 @@ class FreeShearHighRes256Env(AlpacaEnv):
         }
         layers = ["density", "velocity_x", "velocity_y", "pressure"]
         paras = ("q", "cq", "eta")
-        super(FreeShearHighRes256Env, self).__init__(
-            executable="/home/yiqi/PycharmProjects/RL2D2/solvers/ALPACA_32_TENO5RL_ETA_VOR",
+        super(RTIHighRes256Env, self).__init__(
+            executable="/home/yiqi/PycharmProjects/RL2D2/solvers/ALPACA_32_TENO5RL_ETA_G",
             schemefile="/home/yiqi/PycharmProjects/RL2D2/runtime_data/scheme.xml",
-            inputfile="shear_256",
+            inputfile="rti_256",
             parameters=paras,
-            observation_space=spaces.Box(low=-1.0, high=1.0, shape=(len(layers), 64, 64), dtype=np.float32),
+            observation_space=spaces.Box(low=-1.0, high=1.0, shape=(len(layers), 256, 64), dtype=np.float32),
             action_space=spaces.Box(low=action_bound[0], high=action_bound[1], shape=(len(paras), ), dtype=np.float32),
             timestep_size=0.01,
-            time_span=1.0,
-            baseline_data_loc="/media/yiqi/Elements/RL/baseline/shear_64_weno5",
+            time_span=2.0,
+            baseline_data_loc="/media/yiqi/Elements/RL/baseline/rti_256_teno5lin",
             linked_reset=False,
             high_res=(True, 4),
-            cpu_num=6,
+            cpu_num=7,
+            shape=(1024, 256),
             get_state_func=_get_states,
             layers=layers,
             config=config
