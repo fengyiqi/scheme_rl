@@ -131,4 +131,5 @@ dmypy.json
 # pycharm
 __pycache__
 
-
+# vscode
+.idea
