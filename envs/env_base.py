@@ -11,7 +11,6 @@ from .sim_base import (
     SimulationHandler,
     DebugProfileHandler,
     BaselineDataHandler,
-    RANDOM_ROTATE
 )
 # from .sim_base import q_bound, cq_bound, eta_bound, ct_power_bound
 PRINT_VERBOSE = True
@@ -20,48 +19,61 @@ def fmt(value, dig=".3f"):
     return format(value, dig)
 
 class AlpacaEnv(gym.Env, ABC):
-
+    """
+    Base environment of ALPACA simulation, provides interface to gym-env such as reset, step
+    :param executable: location of ALPACA excutable
+    :param inputfile: location of ALPACA inputfile
+    :param schemefile: location of TENO5 parameters interface to ALPACA
+    :param observation_space: observation space
+    :param action_space: action space
+    :param timestep_size: simulation timestep interval
+    :param time_span: end time of the simulation
+    :param baseline_data_loc: location of baseline simulation. Typically we use weno5 as the
+                              reference
+    :param get_state_func: a function that defined how to get the state, which may be different 
+                           for dealing with the initial state
+    :param high_res: a tuple that indicates if a high resolution case is running and how times
+                     larger of the domain than the training simulation
+    :param cpu_num: how many cpu will be used
+    :param dimension: typically 2D
+    :param shape: (y, x), for non-square domain the shape shall be indicated.
+    :param scheme_parameters: optimizing teno5 parameters
+    :param layers: states for the observation
+    :param config: other configuration
+    """
     def __init__(
             self,
             executable: str,
             inputfile: str,
-            parameters: tuple,
+            schemefile: str,
             observation_space: spaces.Box,
             action_space: spaces.Box,
             timestep_size: float,
             time_span: float,
             baseline_data_loc: str,
             get_state_func: Callable,
-            linked_reset: bool = True,
             high_res: tuple = (False, None),
             cpu_num: int = 1,
             dimension: int = 2,
             shape: tuple = None,
-            schemefile: str = "/home/yiqi/PycharmProjects/RL2D/runtime_data/scheme.xml",
-            layers: list = None,
+            scheme_parameters: tuple = ("q", "cq", "eta"),
+            layers: tuple = ("density", "velocity_x", "velocity_y", "pressure"),
             config: dict = None
     ):
-        if layers is None:
-            layers = ["density", "kinetic_energy", "pressure"]
         if config is None:
             config = {}
         self.observation_space = observation_space
         self.action_space = action_space
-        self.evaluation = False
-        self.iteration = None
         self.inputfile = inputfile
-        self.cumulative_quality, self.cumulative_reward = 0, 0
         self.config = config
-        self.linked_reset = linked_reset
         self.shape = shape
         self.obj = self._build_objective(
             executable=executable,
             inputfile=inputfile,
-            parameters=parameters,
+            scheme_parameters=scheme_parameters,
             timestep_size=timestep_size,
             time_span=time_span,
             baseline_data_loc=baseline_data_loc,
-            linked_reset=linked_reset,
             high_res=high_res,
             get_state_func=get_state_func,
             cpu_num=cpu_num,
@@ -71,18 +83,20 @@ class AlpacaEnv(gym.Env, ABC):
             layers=layers,
             config=config
         )
-        self.debug = DebugProfileHandler(objective=self.obj, parameters=parameters)
+        self.debug = DebugProfileHandler(objective=self.obj, scheme_parameters=scheme_parameters)
         self._build_folders()
+        self.evaluation = False
+        self.iteration = None
+        self.cumulative_reward = 0
 
     def _build_objective(
             self,
             executable: str,
             inputfile: str,
-            parameters: tuple,
+            scheme_parameters: tuple,
             timestep_size: float,
             time_span: float,
             baseline_data_loc: str,
-            linked_reset: bool,
             high_res: tuple,
             get_state_func: Callable,
             cpu_num: int,
@@ -92,7 +106,7 @@ class AlpacaEnv(gym.Env, ABC):
             layers: list,
             config: dict
     ) -> SimulationHandler:
-        schemefile = SchemeParametersWriter(schemefile, parameters)
+        schemefile = SchemeParametersWriter(schemefile, scheme_parameters)
         alpaca = AlpacaExecutor(
             executable=executable,
             inputfile=inputfile,
@@ -118,7 +132,6 @@ class AlpacaEnv(gym.Env, ABC):
             time_controller=timestep_controller,
             baseline_data_obj=baseline_data_obj,
             scheme_writer=schemefile,
-            linked_reset=linked_reset,
             high_res=high_res,
             config=config
         )
@@ -138,36 +151,12 @@ class AlpacaEnv(gym.Env, ABC):
         self.debug.action_trajectory = []
         os.system(f"rm -rf runtime_data/{self.obj.inputfile}_*")
 
-    def _if_reset_from_crashed(self):
-        # "and" function
-        conditions = (
-            self.obj.linked_reset,
-            self.obj.is_crashed,
-            self.obj.time_controller.counter < self.obj.time_controller.get_total_steps() - 1,
-            not self.evaluation
-        )
-        return False not in conditions
-
     def reset(self, print_info=False, evaluate=False, iteration=-1):
         self.evaluation = evaluate
-        if iteration > 10:
-            self.obj.linked_reset = False
-        if self._if_reset_from_crashed():
-            # self.obj.time_controller.counter += 1
-            end_time = self.obj.time_controller.get_end_time_string()
-            states = self.obj.baseline_data_obj.states[end_time]
-            self._reset_flags_and_buffers()
-            return np.array(states)
         self._reset_flags_and_buffers()
         self.obj.time_controller.counter = 0
-        self.obj.scheme_writer.last_net_action = (0, 0, 0)
         self.obj.is_crashed = False
-        state = self.obj.baseline_data_obj.initial_state.copy()
-        if not self.obj.high_res[0]:
-            if RANDOM_ROTATE:
-                times = np.random.choice([0, 1, 2, 3])
-                for i, s in enumerate(state):
-                    state[i] = np.rot90(s, k=times)
+        state = self.obj.baseline_data_obj.initial_state
         return state
 
     def step(self, action: list):
@@ -205,14 +194,11 @@ class AlpacaEnv(gym.Env, ABC):
         info += f"\tInputfile: {self.obj.inputfile}\n"
         info += f"\tTimespan: (0, {self.obj.time_controller.get_time_span_string()}); " \
                 f"Timestep size: {self.obj.time_controller.get_timestep_size()}\n"
-        # info += f"\tParameters: q {q_bound}; Cq {cq_bound}; Eta {eta_bound}; Ct(power) {ct_power_bound}\n"
         info += f"\tLayers: {self.obj.layers}\n"
-        info += f"\tSmoothness: {self.obj.smoothness_threshold}\n"
         info += f"\tBaseline data: {self.obj.baseline_data_obj.state_data_loc}\n"
         info += "\n"
         info += f"\tExecutable: {self.obj.solver.executable}\n"
         info += f"\tCore num: {self.obj.solver.cpu_num}"
-        # print("inputfile: ", self.inputfile)
         return info
 
 
