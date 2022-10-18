@@ -50,7 +50,7 @@
             }
             else
             {
-                density := 3.0;
+                density := 4.0;
                 velocityX := 0;
                 velocityY := 0.0;
                 velocityZ := 0.0;
@@ -69,7 +69,7 @@
         <numberOfMaterials>              1   </numberOfMaterials>
         <material1>
             <equationOfState>
-                <type> StiffenedGas </type>
+                <type> STIFFENEDGASSAFE </type>
                 <gamma>               1.4   </gamma>
                 <backgroundPressure>  0.0   </backgroundPressure>
             </equationOfState>

@@ -37,7 +37,7 @@
 	        if (y &gt; 0.5)
        	 	{
                 	density := 1.0;
-                	velocityX := tanh((0.75-y)*80.0);
+                	velocityX := tanh((0.75-y)*100.0);
                 	velocityY := 0.05*sin(2.0*pi*x);
                 	velocityZ := 0.0;
                 	pressure := 100.0;
@@ -45,7 +45,7 @@
         	else
         	{
                 	density := 1.0;
-                	velocityX := tanh((y-0.25)*80.0);
+                	velocityX := tanh((y-0.25)*100.0);
                 	velocityY := 0.05*sin(2.0 * pi * x);
                 	velocityZ := 0.0;
                 	pressure := 100.0;

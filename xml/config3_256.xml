@@ -1,22 +1,22 @@
 <configuration>
     <domain>
         
-        <nodeSize> 0.075  </nodeSize>
+        <nodeSize> 0.15  </nodeSize>
 
         
         <nodeRatio>
-            <x> 4 </x>
-            <y> 4 </y>
+            <x> 8 </x>
+            <y> 8 </y>
             <z> 1 </z>
         </nodeRatio>
 
         <boundaryConditions>
             <material>
                 
-                <west>Symmetry</west>
-                <east>Symmetry</east>
-                <south>Symmetry</south>
-                <north>Symmetry</north>
+                <west>ZeroGradient</west>
+                <east>ZeroGradient</east>
+                <south>ZeroGradient</south>
+                <north>ZeroGradient</north>
                 <bottom>Symmetry</bottom>
                 <top>Symmetry</top>
             </material>
@@ -34,21 +34,38 @@
 
         <initialConditions>
             <material1>
-	        if ((x+y) &lt; 0.15000000001)
-       	 	{
-                	density := 0.125;
-                	velocityX := 0.0;
-                	velocityY := 0.0;
+	        if (x &gt; 1.0 &amp; y &gt; 1.0)
+       	 {
+			density := 1.5;
+			velocityX := 0.0;
+			velocityY := 0.0;
+			velocityZ := 0.0;
+			pressure := 1.5;
+        	}
+        	else if (x &lt; 1.0 &amp; y &gt; 1.0)
+        	{
+        		density := 0.5323;
+			velocityX := 1.206;
+			velocityY := 0.0;
+			velocityZ := 0.0;
+			pressure := 0.3;
+        		
+        	}
+        	else if (x &lt; 1.0 &amp; y &lt; 1.0)
+        	{
+                	density := 0.138;
+                	velocityX := 1.206;
+                	velocityY := 1.206;
                 	velocityZ := 0.0;
-                	pressure := 0.14;
+                	pressure := 0.029;
         	}
         	else
         	{
-                	density := 1.0;
+                	density := 0.5323;
                 	velocityX := 0.0;
-                	velocityY := 0.0;
+                	velocityY := 1.206;
                 	velocityZ := 0.0;
-                	pressure := 1.0;
+                	pressure := 0.3;
         	}
             </material1>
 
@@ -102,7 +119,7 @@
 
    <timeControl>
       <startTime> 0.0  </startTime>
-      <endTime>2.500</endTime>
+      <endTime>1.000</endTime>
       <CFLNumber> 0.6 </CFLNumber>
    </timeControl>
 
@@ -115,15 +132,15 @@
 
    <restart>
       <restore>
-         <mode>Forced</mode>
-         <fileName>implosion_128_2.400/restart/restart_2.400000.h5</fileName>
+         <mode>Forced</mode> 
+         <fileName>config3_128_0.950/restart/restart_0.950000.h5</fileName>
       </restore>
       <snapshots>
-         <type>Stamps</type>
+         <type>Stamps</type> 
          <interval> 3600 </interval> 
          <intervalsToKeep> 2 </intervalsToKeep> 
          <stamps>
-             <ts1>2.500</ts1>
+             <ts1>1.000</ts1>
          </stamps>
       </snapshots>
    </restart>
@@ -132,7 +149,7 @@
       <timeNamingFactor> 1.e0 </timeNamingFactor>
       <standardOutput> 
          <type> Interval </type> 
-         <interval>  0.1 </interval>
+         <interval>  0.01 </interval>
 	      <stamps>
             <ts1> 0.0004 </ts1>
          </stamps>

@@ -2,17 +2,17 @@
 <!-- Toro Section 17.1 - Multidimensional test problems -->
 <configuration>
     <domain>
-        <nodeSize> 1  </nodeSize>
+        <nodeSize> 0.1666666666666666666666666666666666666666666666666667  </nodeSize>
 
         <nodeRatio>
-            <x> 2 </x>
-            <y> 2 </y>
+            <x> 12 </x>
+            <y> 12 </y>
             <z> 1 </z>
         </nodeRatio>
 
         <boundaryConditions>
             <material>
-		<west>   zerogradient </west>
+		        <west>   zerogradient </west>
                 <east>   wall </east>
                 <south>  periodic </south>
                 <north>  periodic </north>
@@ -102,7 +102,7 @@
    <timeControl>
        <startTime> 0.0 </startTime>
        <endTime>   0.5 </endTime>
-       <CFLNumber> 0.6 </CFLNumber>
+       <CFLNumber> 0.2 </CFLNumber>
    </timeControl>
 
    <dimensionalization>
