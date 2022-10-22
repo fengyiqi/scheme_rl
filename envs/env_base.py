@@ -65,6 +65,8 @@ class AlpacaEnv(gym.Env, ABC):
         self.observation_space = observation_space
         self.action_space = action_space
         self.inputfile = inputfile
+        self.timestep_size = timestep_size
+        self.end_time = time_span
         self.config = config
         self.shape = shape
         self.obj = self._build_objective(
@@ -178,6 +180,30 @@ class AlpacaEnv(gym.Env, ABC):
             if PRINT_VERBOSE:
                 self.debug.flush_info()
         return current_state, reward, self.obj.done, infos
+
+    def compute_reward(self, end_time, coef_dict):
+        if self.obj.is_crashed:
+            return -50
+        else:
+            # compute the kinetic energy improvement
+            reward_ke = self.obj.get_ke_reward(end_time=end_time)
+            # compute the anti-diffusion improvement
+            reward_si = self.obj.get_dispersive_to_highorder_baseline_penalty(end_time=end_time)
+            si_penalty = np.max((reward_si, 0)) * coef_dict[end_time]
+            # since we modify Gaussian to SquashedGaussian, we don't need action penalty anymore.
+            # modify sb3/common/distributions/line 661, DiagGaussianDistribution to SquashedDiagGaussianDistribution
+            total_reward = reward_ke - si_penalty + 0.01
+            self.cumulative_reward += total_reward
+            if self.evaluation:
+                end_time = self.obj.time_controller.get_end_time_string()
+                self.debug.collect_info(f"{self.obj.time_controller.get_restart_time_string(end_time, decimal=3)} -> ")
+                self.debug.collect_info(f"{end_time}: ")
+                self.debug.collect_info(f"disper: {round(reward_si, 3):<6} ")
+                self.debug.collect_info(f"disper_penalty: {round(si_penalty, 3):<5} ")
+                self.debug.collect_info(f"coef: {round(coef_dict[end_time], 3):<5} ")
+                self.debug.collect_info(f"ke_reward: {round(reward_ke, 3):<6} ")
+                self.debug.collect_info(f"reward: {round(total_reward, 3):<6} ")
+            return total_reward
 
     @abstractmethod
     def get_reward(self, end_time):
