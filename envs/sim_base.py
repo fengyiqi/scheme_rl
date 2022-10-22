@@ -330,5 +330,6 @@ class DebugProfileHandler:
 
     def flush_info(self):
         print(self.info)
+        with open("log.txt", "a") as file:
+            file.write(self.info + "\n")
         self.info = ""
-        # self.action_trajectory = []
