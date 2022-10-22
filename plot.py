@@ -2,7 +2,7 @@ import numpy as np
 from boiles.objective.simulation2d import Simulation2D
 import matplotlib.pyplot as plt
 
-def plot_states(env, end_times, states, shape=None):
+def plot_states(env, end_times, states, shape=None, path=None):
     cols = len(end_times)
     y_size = 4
     for state in states:
@@ -16,9 +16,10 @@ def plot_states(env, end_times, states, shape=None):
                 plt.title(f"{state} ({end_time[:-1]}s)")
             except:
                 continue
-        plt.show()
+        if path is not None:
+            plt.savefig(path, dpi=400)
 
-def plot_reward_and_quality(value):
+def plot_reward_and_quality(value, path=None):
 
     value_array = np.array(value)
     plt.figure(figsize=(8, 3), dpi=100)
@@ -30,13 +31,14 @@ def plot_reward_and_quality(value):
     plt.plot(value_array[:, 1], color="black", linewidth=0.8)
     plt.title("quality")
     plt.grid()
-    plt.show()
+    if path is not None:
+        plt.savefig(path, dpi=400)
 
-def plot_action_trajectory(action_trajectory):
+def plot_action_trajectory(action_trajectory, path=None):
 
     action_traj = np.array(action_trajectory)
     label = [r"$q$", r"$C$", r"$\eta$"]
-    a_range = [(1-0.5, 6+0.5), (1-1, 20+1), (0.2-0.1, 0.4+0.1)]
+    a_range = [(1-0.5, 6+0.5), (1-1, 20+1), (0.2-0.02, 0.4+0.02)]
     plt.figure(figsize=(len(label)*4, 3))
     for i in range(len(label)):
         plt.subplot(1, len(label), i+1)
@@ -44,5 +46,6 @@ def plot_action_trajectory(action_trajectory):
         plt.ylim(a_range[i][0], a_range[i][1])
         plt.grid()
         plt.title(label[i])
-
-    plt.show()
+    if path is not None:
+        plt.savefig(path, dpi=400)
+    # plt.show()
