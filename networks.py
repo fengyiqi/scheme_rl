@@ -10,7 +10,7 @@ device = torch.device("cpu")
 
 def cnn_net_version_vgglike_full(n_input_channels):
     return nn.Sequential(
-        # 64*64
+        # 64*64 / 32 *128
         nn.Conv2d(n_input_channels, 16, (3, 3), padding=1),
         nn.BatchNorm2d(16),
         nn.ReLU(),
@@ -18,7 +18,7 @@ def cnn_net_version_vgglike_full(n_input_channels):
         nn.BatchNorm2d(16),
         nn.ReLU(),
         nn.MaxPool2d(2),
-        # 32*32
+        # 32*32 / 16 * 64
         nn.Conv2d(16, 32, (3, 3), padding=1),
         nn.BatchNorm2d(32),
         nn.ReLU(),
@@ -26,7 +26,7 @@ def cnn_net_version_vgglike_full(n_input_channels):
         nn.BatchNorm2d(32),
         nn.ReLU(),
         nn.MaxPool2d(2),
-        # 16*16
+        # 16*16 / 8 * 32
         nn.Conv2d(32, 64, (3, 3), padding=1),
         nn.BatchNorm2d(64),
         nn.ReLU(),
@@ -34,7 +34,7 @@ def cnn_net_version_vgglike_full(n_input_channels):
         nn.BatchNorm2d(64),
         nn.ReLU(),
         nn.MaxPool2d(2),
-        # 8*8
+        # 8*8 / 4 * 16
         nn.Conv2d(64, 128, (3, 3), padding=1),
         nn.BatchNorm2d(128),
         nn.ReLU(),
@@ -42,7 +42,7 @@ def cnn_net_version_vgglike_full(n_input_channels):
         nn.BatchNorm2d(128),
         nn.ReLU(),
         nn.MaxPool2d(2),
-        # 4*4
+        # 4*4 / 2 * 8
         nn.Flatten(),
     )
 
@@ -150,7 +150,7 @@ class CustomCNN(BaseFeaturesExtractor):
             n_flatten = self.cnn(
                 torch.as_tensor(observation_space.sample()[None]).float()
             ).shape[1]
-
+        print("Feature vector: ", n_flatten)
         self.linear = nn.Sequential(
             nn.Linear(n_flatten, 1024),
             nn.BatchNorm1d(1024),
@@ -186,7 +186,7 @@ class CustomCNNRTI(BaseFeaturesExtractor):
             n_flatten = self.cnn(
                 torch.as_tensor(observation_space.sample()[None]).float()
             ).shape[1]
-        print(n_flatten)
+        # print(n_flatten)
         self.linear = nn.Sequential(
             nn.Linear(n_flatten, 1024),
             nn.BatchNorm1d(1024),
