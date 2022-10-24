@@ -30,7 +30,7 @@ class FreeShearEnv(AlpacaEnv):
 
     def __init__(self):
         super(FreeShearEnv, self).__init__(
-            executable="/home/yiqi/PycharmProjects/RL2D/solvers/ALPACA_32_TENO5RL_ETA",
+            executable="/home/yiqi/PycharmProjects/RL2D/solvers/ALPACA_32_TENO5RL_ETA_VOR",
             schemefile="/home/yiqi/PycharmProjects/RL2D/runtime_data/scheme.xml",
             inputfile="shear_64",
             observation_space=spaces.Box(low=-1.0, high=1.0, shape=(4, 64, 64), dtype=np.float32),
@@ -39,13 +39,13 @@ class FreeShearEnv(AlpacaEnv):
             time_span=1.0,
             baseline_data_loc="/media/yiqi/Elements/RL/baseline/shear_64_weno5",
             high_res=(False, None),
-            cpu_num=4,
+            cpu_num=2,
             get_state_func=_get_states,
         )
         self.scale_coef = get_scale_coefs("scheme_rl/data/shear_teno5_to_weno5.csv", self.end_time, self.timestep_size)
 
     def get_reward(self, end_time):
-        return self.compute_reward(end_time=end_time, coef_dict=self.scale_coef)
+        return self.compute_reward(end_time=end_time, coef_dict=self.scale_coef, scale=10)
 
 
 
