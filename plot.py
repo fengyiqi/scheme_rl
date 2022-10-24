@@ -3,21 +3,24 @@ from boiles.objective.simulation2d import Simulation2D
 import matplotlib.pyplot as plt
 
 def plot_states(env, end_times, states, shape=None, path=None):
-    cols = len(end_times)
-    y_size = 4
+    rows, cols = len(states), len(end_times)
+    y_size = 4 * rows
+    x_size = 4 * cols
+    i = 0
+    plt.figure(figsize=(x_size, y_size), dpi=200)
     for state in states:
-        plt.figure(figsize=(cols * y_size, y_size), dpi=100)
-        for i, end_time in enumerate(end_times):
+        for end_time in end_times:
+            i += 1
             try:
                 obj = Simulation2D(f"runtime_data/{env.inputfile}_{end_time}/domain/data_{end_time}*.h5", shape) 
                 data = obj.result[state]
-                plt.subplot(1, cols, i+1)
+                plt.subplot(rows, cols, i)
                 plt.imshow(data, origin="lower")
                 plt.title(f"{state} ({end_time[:-1]}s)")
             except:
                 continue
-        if path is not None:
-            plt.savefig(path, dpi=400)
+    if path is not None:
+        plt.savefig(path, dpi=400)
 
 def plot_reward_and_quality(value, path=None):
 
