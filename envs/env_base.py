@@ -13,7 +13,7 @@ from .sim_base import (
     BaselineDataHandler,
 )
 # from .sim_base import q_bound, cq_bound, eta_bound, ct_power_bound
-PRINT_VERBOSE = True
+PRINT_VERBOSE = False
 
 def fmt(value, dig=".3f"):
     return format(value, dig)
@@ -181,7 +181,7 @@ class AlpacaEnv(gym.Env, ABC):
                 self.debug.flush_info()
         return current_state, reward, self.obj.done, infos
 
-    def compute_reward(self, end_time, coef_dict):
+    def compute_reward(self, end_time, coef_dict, scale=1):
         if self.obj.is_crashed:
             return -50
         else:
@@ -192,7 +192,7 @@ class AlpacaEnv(gym.Env, ABC):
             si_penalty = np.max((reward_si, 0)) * coef_dict[end_time]
             # since we modify Gaussian to SquashedGaussian, we don't need action penalty anymore.
             # modify sb3/common/distributions/line 661, DiagGaussianDistribution to SquashedDiagGaussianDistribution
-            total_reward = reward_ke - si_penalty + 0.01
+            total_reward = (reward_ke - si_penalty + 0.01) * scale
             self.cumulative_reward += total_reward
             if self.evaluation:
                 end_time = self.obj.time_controller.get_end_time_string()
