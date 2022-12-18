@@ -150,7 +150,7 @@ class CustomCNN(BaseFeaturesExtractor):
             n_flatten = self.cnn(
                 torch.as_tensor(observation_space.sample()[None]).float()
             ).shape[1]
-        print("Feature vector: ", n_flatten)
+        # print("Feature vector: ", n_flatten)
         self.linear = nn.Sequential(
             nn.Linear(n_flatten, 1024),
             nn.BatchNorm1d(1024),

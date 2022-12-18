@@ -144,7 +144,8 @@ class BaselineDataHandler:
         self.get_state_func = get_state_func
         self.simulation_reader = Simulation2D if dimension == 2 else TaylorGreenVortex
         self.shape = shape
-
+        self.config = config
+        self.subdomain = None if self.config is None else self.config.get("subdomain", None)
         self.initial_state = self.get_initial_state()
         # cached in memory. 
         self.kinetic = self.get_all_baseline_ke_reward()
@@ -163,8 +164,18 @@ class BaselineDataHandler:
 
     def get_initial_state(self):
         data_obj = self.simulation_reader(file=os.path.join(self.state_data_loc, f"data_0.000000.h5"), shape=self.shape)
-        states = self.get_state_func(data_obj=data_obj, layers=self.layers, ave_pool=self.high_res[1])
+        if self.subdomain is None:
+            states = self.get_state_func(data_obj=data_obj, layers=self.layers, ave_pool=self.high_res[1])
+        else:
+            row = slice(None, self.subdomain[0])
+            col = slice(None, self.subdomain[1])
+            states = self.get_state_func(data_obj=data_obj, subdomain=(row, col), layers=self.layers, ave_pool=self.high_res[1])
         return states
+
+    def get_raw_state(self, state):
+        data_obj = self.simulation_reader(file=os.path.join(self.state_data_loc, f"data_0.000000.h5"), shape=self.shape)
+        rs = data_obj.result[state]
+        return rs
 
     def get_all_baseline_dispersive_reward(self):
         if self.high_res[0]:
@@ -173,7 +184,7 @@ class BaselineDataHandler:
         for timestep in np.arange(0, self.end_time + 1e-6, self.timestep_size):
             end_time = format(timestep, ".3f")
             data_obj = self.simulation_reader(file=os.path.join(self.state_data_loc, f"data_{end_time}*.h5"), shape=self.shape)
-            _, rewards[end_time], _, _ = data_obj.truncation_errors()
+            _, rewards[end_time], _, _ = data_obj.truncation_errors(subdomain=self.subdomain)
         return rewards
 
     def get_all_baseline_highorder_dissipation_rate(self):
@@ -183,7 +194,12 @@ class BaselineDataHandler:
         for timestep in np.arange(0, self.end_time + 1e-6, self.timestep_size):
             end_time = format(timestep, ".3f")
             data_obj = self.simulation_reader(file=os.path.join(self.state_data_loc, f"data_{end_time}*.h5"), shape=self.shape)
-            rate[end_time] = data_obj.result["highorder_dissipation_rate"]
+            if self.subdomain is None:
+                rate[end_time] = data_obj.result["highorder_dissipation_rate"]
+            else:
+                row = slice(None, self.subdomain[0])
+                col = slice(None, self.subdomain[1])
+                rate[end_time] = data_obj.result["highorder_dissipation_rate"][row, col]
         return rate
 
     def get_all_baseline_ke_reward(self):
@@ -193,7 +209,12 @@ class BaselineDataHandler:
         for timestep in np.arange(0, self.end_time + 1e-6, self.timestep_size):
             end_time = format(timestep, ".3f")
             data_obj = self.simulation_reader(file=os.path.join(self.state_data_loc, f"data_{end_time}*.h5"), shape=self.shape)
-            rewards[end_time] = data_obj.result["kinetic_energy"].sum()
+            if self.subdomain is None:
+                rewards[end_time] = data_obj.result["kinetic_energy"].sum()
+            else:
+                row = slice(None, self.subdomain[0])
+                col = slice(None, self.subdomain[1])
+                rewards[end_time] = data_obj.result["kinetic_energy"][row, col].sum()
         return rewards
 
 class SimulationHandler:
@@ -225,6 +246,8 @@ class SimulationHandler:
         self.simulation_reader = self.baseline_data_obj.simulation_reader
         self.shape = self.baseline_data_obj.shape
         self.get_state_func = self.baseline_data_obj.get_state_func
+        self.config = config
+        self.subdomain = None if self.config is None else self.config.get("subdomain", None)
         self.done = False
         self.is_crashed = False
         self.layers = baseline_data_obj.layers
@@ -283,12 +306,33 @@ class SimulationHandler:
             self.is_crashed = True
             self.done = True
             return self.baseline_data_obj.initial_state
-        else:
+        # used for viscous shock tubu. Not used anymore
+        # for row in self.current_data.result["density"]:
+        #     for col in row:
+        #         if col > 1000:
+        #             self.is_crashed = True
+        #             self.done = True
+        #             return self.baseline_data_obj.initial_state
+        if self.subdomain is None:
             state = self.get_state_func(data_obj=self.current_data, layers=self.layers, ave_pool=self.high_res[1])
-            return state
+        else:
+            row = slice(None, self.subdomain[0])
+            col = slice(None, self.subdomain[1])
+            state = self.get_state_func(data_obj=self.current_data, subdomain=(row, col), layers=self.layers, ave_pool=self.high_res[1])
+        return state
+
+    # def get_raw_state(self, end_time, state):
+    #     self.current_data = self.simulation_reader(file=f"runtime_data/{self.inputfile}_{end_time}/domain/data_{end_time}*.h5", shape=self.shape)
+    #     re = self.current_data.result[state]
+    #     return re
 
     def get_dispersive_to_highorder_baseline_penalty(self, end_time):
-        eff_rate = self.current_data.result["effective_dissipation_rate"]
+        if self.subdomain is None:
+            eff_rate = self.current_data.result["effective_dissipation_rate"]
+        else:
+            row = slice(None, self.subdomain[0])
+            col = slice(None, self.subdomain[1])
+            eff_rate = self.current_data.result["effective_dissipation_rate"][row, col]
         highorder_baseline_rate = self.baseline_data_obj.highorder_dissipation_rate[end_time]
         adi_to_baseline = highorder_baseline_rate - eff_rate
         dispersion = np.where(adi_to_baseline < 0, adi_to_baseline, 0).sum()
@@ -297,7 +341,12 @@ class SimulationHandler:
         return adi
 
     def get_ke_reward(self, end_time):
-        reward = self.current_data.result["kinetic_energy"].sum()
+        if self.subdomain is None:
+            reward = self.current_data.result["kinetic_energy"].sum()
+        else:
+            row = slice(None, self.subdomain[0])
+            col = slice(None, self.subdomain[1])
+            reward = self.current_data.result["kinetic_energy"][row, col].sum()
         baseline_reward = self.baseline_data_obj.kinetic[end_time]
         improvement = reward / baseline_reward - 1
         return improvement

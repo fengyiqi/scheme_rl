@@ -6,9 +6,9 @@ parser.add_argument("-case_name", type=str, required=True, help="type a test cas
 # workstation, desktop
 parser.add_argument("-computer", type=str, required=True, help="type which computer is used: workstation, desktop")
 parser.add_argument("-seed", type=int, required=True, help="type an integer random seed")
-parser.add_argument("-buffer_length", type=int, default=1000, help="type a buffer length")
-parser.add_argument("-batch_length", type=int, default=50, help="type a batch length")
-parser.add_argument("-iteration", type=int, default=200, help="type a number of iteration")
+parser.add_argument("-buffer_length", type=int, default=1024, help="type a buffer length")
+parser.add_argument("-batch_length", type=int, default=64, help="type a batch length")
+parser.add_argument("-iteration", type=int, default=400, help="type a number of iteration")
 
 args = parser.parse_args()
 print(args)
@@ -25,7 +25,7 @@ from stable_baselines3.common.logger import configure
 from scheme_rl.networks import CustomCNN
 from scheme_rl.plot import plot_action_trajectory, plot_states, plot_reward_and_quality
 
-os.system("rm -rf ppo_models runtime_data")
+os.system("rm -rf ppo_models runtime_data log.txt")
 seed = args.seed
 set_random_seed(seed)
 
@@ -41,6 +41,12 @@ if args.case_name.lower() == "config3":
 if args.case_name.lower() == "shear":
     from scheme_rl.envs.shear_flow import FreeShearEnv
     env = FreeShearEnv()
+if args.case_name.lower() == "viscous_shock":
+    from scheme_rl.envs.viscous_shock import ViscousShockTubeEnv
+    env = ViscousShockTubeEnv()
+if args.case_name.lower() == "moving_gresho":
+    from scheme_rl.envs.gresho import MovingGreshoEnv
+    env = MovingGreshoEnv()
 
 env.reset()
 
@@ -72,14 +78,14 @@ for i in range(args.iteration):
     env.reset()
     model.policy.float()
     model.learn(
-        total_timesteps=2 * args.buffer_length, 
+        total_timesteps=args.buffer_length, 
         n_eval_episodes=2, 
         eval_freq=5, 
         log_interval=1,
         reset_num_timesteps=False
     )
     model.save(f"ppo_models/{env.inputfile}_{seed}_{i}.zip")
-    if args.computer.lower() == "desktop" and i % 5 == 0:
+    if args.computer.lower() == "desktop" and i % 10 == 0:
         obs = env.reset(evaluate=True)
         dones = False
         while not dones:
@@ -90,7 +96,8 @@ for i in range(args.iteration):
         plot_reward_and_quality(reward_and_quality, path=f"./figures/reward.jpg")
         plot_states(
             env,
-            end_times=["0.500", "1.000", "1.950", "2.000"], 
-            states=["density"],
-            path=f"./figures/states.jpg"
+            end_times=["0.500", "1.000", "1.500", "2.000", "2.500", "3.000"], 
+            states=["density", "velocity_x", "velocity_y", "pressure", "vorticity"],
+            path=f"./figures/states_{i}.jpg",
+            shape=env.shape
         )
