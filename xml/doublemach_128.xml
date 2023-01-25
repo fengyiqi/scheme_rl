@@ -1,12 +1,12 @@
 <configuration>
     <domain>
         
-        <nodeSize> 1  </nodeSize>
+        <nodeSize> 0.25  </nodeSize>
 
         
         <nodeRatio>
-            <x> 4 </x>
-            <y> 4 </y>
+            <x> 16 </x>
+            <y> 16 </y>
             <z> 1 </z>
         </nodeRatio>
 

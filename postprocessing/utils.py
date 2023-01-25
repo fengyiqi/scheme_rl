@@ -42,34 +42,19 @@ def safe_create_folder(path: str):
     os.makedirs(path)
 
 
-def dispersion_to_baseline(base: Simulation2D, sim: Simulation2D):
-    """
-    computer anti-diffusion increase to baseline
-    """
-    base_trunc = base.result["highorder_dissipation_rate"]
-    sim_eff = sim.result["effective_dissipation_rate"]
-    trunc = base_trunc - sim_eff
-    return np.where(trunc < 0, trunc, 0).sum()
-
 
 def test_on_highresolution(
     name: str,
     model_path: str,
-    envs: list
+    envs: list,
 ):
-    """
-    Test training case and highresolution case with trained model
-    :param name: case name
-    :param model_path: trained model
-    :param envs: environment for testing
-    """
     folder = f"/media/yiqi/Elements/RL/August/{name}/"
     for env in envs:
         print("- Build environment ... ")
         env = env() # create an instance
         model = PPO.load(model_path, env=env, device="cuda")
         dones = False
-        obs = env.reset(evaluate=True)
+        obs = env.reset(verbose=False, evaluate=True)
         
         print(f"- Run {env.__class__.__name__} ... ")
         while not dones:
@@ -83,15 +68,13 @@ def test_on_highresolution(
         env_folder = os.path.join(folder, env.__class__.__name__)
         safe_create_folder(env_folder)
         safe_create_folder(os.path.join(env_folder, "runtime_data"))
-        log(model_path, os.path.join(env_folder, "log.txt"))
         # copy to hard drive and release the space, since SSD doesn't have enough storage
-        # os.system(f"cp -r ./runtime_data/{env.inputfile}_{format(env.end_time, '.3f')} {folder}/{env.__class__.__name__}/runtime_data")
-        os.system(f"cp -r ./runtime_data/{env.inputfile}_* {folder}/{env.__class__.__name__}/runtime_data")
-        os.system(f"rm -rf ./runtime_data/{env.inputfile}_*")  
+        os.system(f"cp -r ./runtime_data/{env.inputfile}_* {env_folder}/runtime_data")
+        os.system(f"rm -rf runtime_data")  
         
         print("- Save the actions ... ")
         actions = pd.DataFrame(env.debug.action_trajectory, columns=["q", "C", "eta"])
-        actions.to_csv(f"{folder}/{env.__class__.__name__}/actions.csv")
+        actions.to_csv(f"{env_folder}/actions.csv")
         print("-------- END ----------")
 
 
@@ -215,6 +198,16 @@ def plot_separate_test_results(
     if path is not None:
         plt.savefig(path, dpi=400)
 
+def dispersion_to_baseline(base: Simulation2D, sim: Simulation2D):
+    """
+    computer anti-diffusion increase to baseline
+    """
+    base_trunc = base.result["highorder_dissipation_rate"]
+    sim_eff = sim.result["effective_dissipation_rate"]
+    trunc = base_trunc - sim_eff
+    return np.where(trunc < 0, trunc, 0).sum()
+
+
 def compute_improvement(
     name: str,
     cells: int,
@@ -228,24 +221,24 @@ def compute_improvement(
     baseline_folder = "baseline"
     for scheme in test_schemes: 
         results = []
-        timesteps = np.arange(0.01, end_time + 1e-6, timestep_size)
+        timesteps = np.arange(timestep_size, end_time + 1e-6, timestep_size)
         for t in timesteps:
             print(f"{scheme} to {baseline}:")
             print(f"{round(t / end_time * 100, 2)}% ... ")
             clear_output(wait=True)
             time = format(t, ".3f")
-            base = Simulation2D(f"/media/yiqi/Elements/RL/{baseline_folder}/{name}_{cells}_{baseline}/domain/data_{time}*.h5", shape=shape)
+            base = Simulation2D(f"/media/yiqi/Elements/RL/{baseline_folder}/{name}/{name}_{cells}_{baseline}/domain/data_{time}*.h5", shape=shape)
             ke_base = base.result["kinetic_energy"].sum()
             dissip_base, disper_base, sum_base, _ = base.truncation_errors()
             if scheme != "teno5rl":
-                test = Simulation2D(f"/media/yiqi/Elements/RL/{baseline_folder}/{name}_{cells}_{scheme}/domain/data_{time}*.h5", shape=shape)
+                test = Simulation2D(f"/media/yiqi/Elements/RL/{baseline_folder}/{name}/{name}_{cells}_{scheme}/domain/data_{time}*.h5", shape=shape)
             else:
                 test = Simulation2D(f"/media/yiqi/Elements/RL/August/{name}/{envs_names[cells]}/runtime_data/{name}_{cells}_{time}/domain/data_{time}*.h5", shape=shape)
             ke_test = test.result["kinetic_energy"].sum()
             ke_reward = ke_test / ke_base - 1
             disper_test = dispersion_to_baseline(base, test)
-            disper_imp = abs(disper_test) / abs(disper_base) - 1
-            row = [float(time), ke_base, ke_test, ke_reward, abs(disper_base), abs(disper_test), disper_imp]
+            disper_imp = disper_test / disper_base - 1
+            row = [float(time), ke_base, ke_test, ke_reward, disper_base, disper_test, disper_imp]
             results.append(row)
 
         results = pd.DataFrame(results, columns=[
@@ -257,7 +250,7 @@ def compute_improvement(
             "disper_test", 
             "disper_imp", 
         ])
-        results.to_csv(f"/media/yiqi/Elements/RL/August/{name}/{envs_names[cells]}/{scheme}_to_{baseline}_info.csv")
+        results.to_csv(f"/media/yiqi/Elements/RL/August/{name}/{envs_names[cells]}/{scheme}_to_{baseline}_info.csv", index=False)
 
 def plot_improvement(
     name: str,
@@ -266,9 +259,9 @@ def plot_improvement(
     baseline = "weno5"
     envs_names = envs_name(name)
 
-    teno5_to_weno5 = pd.read_csv(f"/media/yiqi/Elements/RL/August/{name}/{envs_names[cells]}/teno5_to_{baseline}_info.csv", index_col=0)
-    teno5lin_to_weno5 = pd.read_csv(f"/media/yiqi/Elements/RL/August/{name}/{envs_names[cells]}/teno5lin_to_{baseline}_info.csv", index_col=0)
-    teno5rl_to_weno5 = pd.read_csv(f"/media/yiqi/Elements/RL/August/{name}/{envs_names[cells]}/teno5rl_to_{baseline}_info.csv", index_col=0)
+    teno5_to_weno5 = pd.read_csv(f"/media/yiqi/Elements/RL/August/{name}/{envs_names[cells]}/teno5_to_{baseline}_info.csv")
+    teno5lin_to_weno5 = pd.read_csv(f"/media/yiqi/Elements/RL/August/{name}/{envs_names[cells]}/teno5lin_to_{baseline}_info.csv")
+    teno5rl_to_weno5 = pd.read_csv(f"/media/yiqi/Elements/RL/August/{name}/{envs_names[cells]}/teno5rl_to_{baseline}_info.csv")
 
     df = pd.concat([teno5_to_weno5["t"], teno5_to_weno5["ke_reward"]*100, teno5lin_to_weno5["ke_reward"]*100, teno5rl_to_weno5["ke_reward"]*100], axis=1)
     df.columns = ["t", "TENO5", "TENO5SP", "TENO5RL"]
@@ -413,9 +406,9 @@ def compute_reward(
             print(f"{round(t / end_time * 100, 2)}% ... ")
             clear_output(wait=True)
             time = format(t, ".3f")
-            base = Simulation2D(f"/media/yiqi/Elements/RL/baseline/{name}_{cells}_{baseline}/domain/data_{time}*.h5", shape=shape)
+            base = Simulation2D(f"/media/yiqi/Elements/RL/baseline/{name}/{name}_{cells}_{baseline}/domain/data_{time}*.h5", shape=shape)
             if scheme != "teno5rl":
-                test = Simulation2D(f"/media/yiqi/Elements/RL/baseline/{name}_{cells}_{scheme}/domain/data_{time}*.h5", shape=shape)
+                test = Simulation2D(f"/media/yiqi/Elements/RL/baseline/{name}/{name}_{cells}_{scheme}/domain/data_{time}*.h5", shape=shape)
             else:
                 test = Simulation2D(f"/media/yiqi/Elements/RL/August/{name}/{envs_names[cells]}/runtime_data/{name}_{cells}_{time}/domain/data_{time}*.h5", shape=shape)
             
@@ -436,7 +429,7 @@ def compute_reward(
             "t",
             "reward"
         ])
-        results.to_csv(f"/media/yiqi/Elements/RL/August/{name}/{envs_names[cells]}/{scheme}_to_{baseline}_reward.csv")
+        results.to_csv(f"/media/yiqi/Elements/RL/August/{name}/{envs_names[cells]}/{scheme}_to_{baseline}_reward.csv", index=False)
 
 
 def plot_discounted_reward(

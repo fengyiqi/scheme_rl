@@ -5,42 +5,42 @@ def data_path(name: str, time: str):
     if name.lower() == "implosion":
         return {
             64: [
-                f"/media/yiqi/Elements/RL/baseline/implosion_64_weno5/domain/data_{time}*.h5",
-                f"/media/yiqi/Elements/RL/baseline/implosion_64_teno5/domain/data_{time}*.h5",
-                f"/media/yiqi/Elements/RL/baseline/implosion_64_teno5lin/domain/data_{time}*.h5",
+                f"/media/yiqi/Elements/RL/baseline/implosion/implosion_64_weno5/domain/data_{time}*.h5",
+                f"/media/yiqi/Elements/RL/baseline/implosion/implosion_64_teno5/domain/data_{time}*.h5",
+                f"/media/yiqi/Elements/RL/baseline/implosion/implosion_64_teno5lin/domain/data_{time}*.h5",
                 f"/media/yiqi/Elements/RL/August/implosion/ImplosionEnv/runtime_data/implosion_64_{time}/domain/data_{time}000.h5",
             ],
             128: [
-                f"/media/yiqi/Elements/RL/baseline/implosion_128_weno5/domain/data_{time}*.h5",
-                f"/media/yiqi/Elements/RL/baseline/implosion_128_teno5/domain/data_{time}*.h5",
-                f"/media/yiqi/Elements/RL/baseline/implosion_128_teno5lin/domain/data_{time}*.h5",
+                f"/media/yiqi/Elements/RL/baseline/implosion/implosion_128_weno5/domain/data_{time}*.h5",
+                f"/media/yiqi/Elements/RL/baseline/implosion/implosion_128_teno5/domain/data_{time}*.h5",
+                f"/media/yiqi/Elements/RL/baseline/implosion/implosion_128_teno5lin/domain/data_{time}*.h5",
                 f"/media/yiqi/Elements/RL/August/implosion/ImplosionHighRes128Env/runtime_data/implosion_128_{time}/domain/data_{time}000.h5",
             ],
             256: [
-                f"/media/yiqi/Elements/RL/baseline/implosion_256_weno5/domain/data_{time}*.h5",
-                f"/media/yiqi/Elements/RL/baseline/implosion_256_teno5/domain/data_{time}*.h5",
-                f"/media/yiqi/Elements/RL/baseline/implosion_256_teno5lin/domain/data_{time}*.h5",
+                f"/media/yiqi/Elements/RL/baseline/implosion/implosion_256_weno5/domain/data_{time}*.h5",
+                f"/media/yiqi/Elements/RL/baseline/implosion/implosion_256_teno5/domain/data_{time}*.h5",
+                f"/media/yiqi/Elements/RL/baseline/implosion/implosion_256_teno5lin/domain/data_{time}*.h5",
                 f"/media/yiqi/Elements/RL/August/implosion/ImplosionHighRes256Env/runtime_data/implosion_256_{time}/domain/data_{time}000.h5",
             ]
         }
     elif name.lower() == "config3":
         return {
             64: [
-                f"/media/yiqi/Elements/RL/baseline/config3_64_weno5/domain/data_{time}*.h5",
-                f"/media/yiqi/Elements/RL/baseline/config3_64_teno5/domain/data_{time}*.h5",
-                f"/media/yiqi/Elements/RL/baseline/config3_64_teno5lin/domain/data_{time}*.h5",
+                f"/media/yiqi/Elements/RL/baseline/config3/config3_64_weno5/domain/data_{time}*.h5",
+                f"/media/yiqi/Elements/RL/baseline/config3/config3_64_teno5/domain/data_{time}*.h5",
+                f"/media/yiqi/Elements/RL/baseline/config3/config3_64_teno5lin/domain/data_{time}*.h5",
                 f"/media/yiqi/Elements/RL/August/config3/RiemannConfig3Env/runtime_data/config3_64_{time}/domain/data_{time}000.h5",
             ],
             256: [
-                f"/media/yiqi/Elements/RL/baseline/config3_256_weno5/domain/data_{time}*.h5",
-                f"/media/yiqi/Elements/RL/baseline/config3_256_teno5/domain/data_{time}*.h5",
-                f"/media/yiqi/Elements/RL/baseline/config3_256_teno5lin/domain/data_{time}*.h5",
+                f"/media/yiqi/Elements/RL/baseline/config3/config3_256_weno5/domain/data_{time}*.h5",
+                f"/media/yiqi/Elements/RL/baseline/config3/config3_256_teno5/domain/data_{time}*.h5",
+                f"/media/yiqi/Elements/RL/baseline/config3/config3_256_teno5lin/domain/data_{time}*.h5",
                 f"/media/yiqi/Elements/RL/August/config3/RiemannConfig3HighRes256Env/runtime_data/config3_256_{time}/domain/data_{time}000.h5",
             ],
             512: [
-                f"/media/yiqi/Elements/RL/baseline/config3_512_weno5/domain/data_{time}*.h5",
-                f"/media/yiqi/Elements/RL/baseline/config3_512_teno5/domain/data_{time}*.h5",
-                f"/media/yiqi/Elements/RL/baseline/config3_512_teno5lin/domain/data_{time}*.h5",
+                f"/media/yiqi/Elements/RL/baseline/config3/config3_512_weno5/domain/data_{time}*.h5",
+                f"/media/yiqi/Elements/RL/baseline/config3/config3_512_teno5/domain/data_{time}*.h5",
+                f"/media/yiqi/Elements/RL/baseline/config3/config3_512_teno5lin/domain/data_{time}*.h5",
                 f"/media/yiqi/Elements/RL/August/config3/RiemannConfig3HighRes512Env/runtime_data/config3_512_{time}/domain/data_{time}000.h5",
             ]
         }
@@ -208,6 +208,12 @@ def envs_name(name: str):
             128: "FreeShearThinHighRes128Env", 
             256: "FreeShearThinHighRes256Env",
         }
+    elif name.lower() == "doublemach":
+        return {
+            32: "DoubleMachReflectionEnv", 
+            # 64: "MovingGreshoHighRes64Env", 
+            # 128: "MovingGreshoHighRes128Env",
+        }
     else:
         raise "No such configuration!"
 
@@ -249,6 +255,11 @@ def time_config(name: str):
         return {
             "end_time": 3.0, 
             "timestep_size": 0.01, 
+        }
+    elif name.lower() == "doublemach":
+        return {
+            "end_time": 0.2, 
+            "timestep_size": 0.002, 
         }
     else:
         raise "No such configuration!"
@@ -301,6 +312,13 @@ def shape_config(name: str):
             32: (32, 128), 
             64: (64, 256), 
             128: (128, 512),
+            # 512: (256, 512)
+        }
+    elif name.lower() == "doublemach":
+        return {
+            32: (128, 128), 
+            # 64: (64, 256), 
+            # 128: (128, 512),
             # 512: (256, 512)
         }
     else:

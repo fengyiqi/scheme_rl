@@ -1,62 +1,54 @@
 <configuration>
     <domain>
         
-        <nodeSize> 1  </nodeSize>
+        <nodeSize> 0.22  </nodeSize>
 
         
         <nodeRatio>
-            <x> 4 </x>
-            <y> 4 </y>
+            <x> 5 </x>
+            <y> 5 </y>
             <z> 1 </z>
         </nodeRatio>
 
         <boundaryConditions>
             <material>
                 
-                <west>FixedValue</west>
-                <valuesWest>
-                    <density>8.0</density>
-                    <velocityX>7.145</velocityX>
-                    <velocityY>-4.125</velocityY>
-                    <velocityZ>0.0</velocityZ>
-                    <pressure>116.5</pressure>
-                    <temperature>1.0</temperature>
-                </valuesWest>
-                <east>ZeroGradient</east>
-                <south>Symmetry</south>
-                <north>ZeroGradient</north>
-                <bottom>Symmetry</bottom>
-                <top>Symmetry</top>
+                <west>periodic</west>
+                <east>periodic</east>
+                <south>periodic</south>
+                <north>periodic</north>
+                <bottom>periodic</bottom>
+                <top>periodic</top>
             </material>
 
             <levelSet>
                 
-                <west>   symmetry </west>
-                <east>   symmetry </east>
-                <south>  symmetry </south>
-                <north>  symmetry </north>
-                <bottom> symmetry </bottom>
-                <top>    symmetry </top>
+                <west>   periodic </west>
+                <east>   periodic </east>
+                <south>  periodic </south>
+                <north>  periodic </north>
+                <bottom> periodic </bottom>
+                <top>    periodic </top>
             </levelSet>
         </boundaryConditions>
 
         <initialConditions>
             <material1>
-	        if (y &lt; 1.732 * (x - 1.0 / 6.0))
+	        if (y &gt; 0.5)
        	 	{
-                	density := 1.4;
-                	velocityX := 0.0;
-                	velocityY := 0.0;
+                	density := 1.0;
+                	velocityX := tanh((0.75-y)*120.0);
+                	velocityY := 0.05*sin(2.0*pi*x);
                 	velocityZ := 0.0;
-                	pressure := 1.0;
+                	pressure := 100.0;
         	}
         	else
         	{
-                	density := 8.0;
-                	velocityX := 7.145;
-                	velocityY := -4.125;
+                	density := 1.0;
+                	velocityX := tanh((y-0.25)*120.0);
+                	velocityY := 0.05*sin(2.0 * pi * x);
                 	velocityZ := 0.0;
-                	pressure := 116.5;
+                	pressure := 100.0;
         	}
             </material1>
 
@@ -72,19 +64,19 @@
       <numberOfMaterials> 1   </numberOfMaterials>
       <material1>
          <equationOfState>
-            <type> StiffenedGasSafe </type>
+            <type> StiffenedGas </type>
             <gamma>               1.4   </gamma>
             <A>                   0.0   </A>
             <B>                   0.0   </B>
             <C>                   0.0   </C>
-            <rho0>                0.0   </rho0>
-            <specificGasConstant> 0.0   </specificGasConstant>
-            <backgroundPressure> 0.0 </backgroundPressure>
+            <rho0>                1.2   </rho0>
+	    <specificGasConstant> 0.0   </specificGasConstant>
+	    <backgroundPressure>  0.0   </backgroundPressure>
 	      </equationOfState>
          <properties>
             <specificHeatCapacity> 0.0 </specificHeatCapacity>
             <thermalConductivity> 0.0 </thermalConductivity>
-            <shearViscosity> 0.0 </shearViscosity>
+            <shearViscosity> 0.0001 </shearViscosity>
             <bulkViscosity> 0.0 </bulkViscosity>
          </properties>
       </material1>
@@ -110,7 +102,7 @@
 
    <timeControl>
       <startTime> 0.0  </startTime>
-      <endTime>0.2</endTime>
+      <endTime>1.000</endTime>
       <CFLNumber> 0.8 </CFLNumber>
    </timeControl>
 
@@ -124,37 +116,14 @@
    <restart>
       <restore>
          <mode>Off</mode> 
-         <fileName>None</fileName>
+         <fileName>free_shear_64_1.900/restart/restart_1.900000.h5</fileName>
       </restore>
       <snapshots>
-         <type>Stamps</type> 
+         <type>Off</type> 
          <interval> 3600 </interval> 
          <intervalsToKeep> 2 </intervalsToKeep> 
          <stamps>
-             <ts1>0.100</ts1>
-             <ts2>0.200</ts2>
-             <ts3>0.300</ts3>
-             <ts4>0.400</ts4>
-             <ts5>0.500</ts5>
-             <ts6>0.600</ts6>
-             <ts7>0.700</ts7>
-             <ts8>0.800</ts8>
-             <ts9>0.900</ts9>
-             <ts10>1.000</ts10>
-             <ts11>1.100</ts11>
-             <ts12>1.200</ts12>
-             <ts13>1.300</ts13>
-             <ts14>1.400</ts14>
-             <ts15>1.500</ts15>
-             <ts16>1.600</ts16>
-             <ts17>1.700</ts17>
-             <ts18>1.800</ts18>
-             <ts19>1.900</ts19>
-             <ts20>2.000</ts20>
-             <ts21>2.100</ts21>
-             <ts22>2.200</ts22>
-             <ts23>2.300</ts23>
-             <ts24>2.400</ts24>
+             <ts1>2.000</ts1>
          </stamps>
       </snapshots>
    </restart>
@@ -163,9 +132,16 @@
       <timeNamingFactor> 1.e0 </timeNamingFactor>
       <standardOutput> 
          <type> Interval </type> 
-         <interval>  0.02 </interval>
+         <interval>  0.01 </interval>
 	      <stamps>
-            <ts1> 0.0004 </ts1>
+            <ts1> 0.6 </ts1>
+	    <ts2> 0.8 </ts2>
+	    <ts3> 1.0 </ts3>
+	    <ts4> 1.2 </ts4>
+	    <ts5> 2.5 </ts5>
+	    <ts6> 10.0 </ts6>
+	    <ts7> 20.0 </ts7>
+
          </stamps>
       </standardOutput>
       <interfaceOutput> 

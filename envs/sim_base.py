@@ -103,8 +103,11 @@ class AlpacaExecutor:
         self.inputfile = inputfile
         self.cpu_num = cpu_num
 
-    def run_alpaca(self, inputfile):
-        os.system(f"cd runtime_data; mpiexec -n {self.cpu_num} {self.executable} inputfiles/{inputfile}")
+    def run_alpaca(self, inputfile, evaluation):
+        executable = self.executable
+        if evaluation:
+            executable += "_EVAL"
+        os.system(f"cd runtime_data; mpiexec -n {self.cpu_num} {executable} inputfiles/{inputfile}")
 
 class BaselineDataHandler:
     """
@@ -147,10 +150,24 @@ class BaselineDataHandler:
         self.config = config
         self.subdomain = None if self.config is None else self.config.get("subdomain", None)
         self.initial_state = self.get_initial_state()
+        # self.all_raw_state = self.get_all_raw_state()
+        # self.initial_state = self.all_raw_state["0.000"]
         # cached in memory. 
         self.kinetic = self.get_all_baseline_ke_reward()
         self.highorder_dissipation_rate = self.get_all_baseline_highorder_dissipation_rate()
         self.dispersive = self.get_all_baseline_dispersive_reward()
+        
+
+    def get_all_raw_state(self):
+        states = {}
+        for timestep in np.arange(0, self.end_time + 1e-6, self.timestep_size):
+            end_time = format(timestep, ".3f")
+            data_obj = self.simulation_reader(file=os.path.join(self.state_data_loc, f"data_{end_time}*.h5"), shape=self.shape)
+            field = []
+            for layer in self.layers:
+                field.append(data_obj.result[layer])
+            states[end_time] = np.array(field)
+        return states
 
     def get_all_states(self):
         states = {}
@@ -297,8 +314,8 @@ class SimulationHandler:
         os.system(f"mv {old_file} {new_file}")
         return f"{self.inputfile}_{end_time}.xml"
 
-    def run(self, inputfile):
-        self.solver.run_alpaca(inputfile)
+    def run(self, inputfile, evaluation):
+        self.solver.run_alpaca(inputfile, evaluation=evaluation)
 
     def get_state(self, end_time):
         self.current_data = self.simulation_reader(file=f"runtime_data/{self.inputfile}_{end_time}/domain/data_{end_time}*.h5", shape=self.shape)

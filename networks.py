@@ -11,6 +11,7 @@ device = torch.device("cpu")
 def cnn_net_version_vgglike_full(n_input_channels):
     return nn.Sequential(
         # 64*64 / 32 *128
+        nn.BatchNorm2d(n_input_channels, affine=True),
         nn.Conv2d(n_input_channels, 16, (3, 3), padding=1),
         nn.BatchNorm2d(16),
         nn.ReLU(),

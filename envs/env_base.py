@@ -56,7 +56,7 @@ class AlpacaEnv(gym.Env, ABC):
             cpu_num: int = 1,
             dimension: int = 2,
             shape: tuple = None,
-            scheme_parameters: tuple = ("q", "cq", "eta"),
+            scheme_parameters: list = ["q", "cq", "eta"],
             layers: tuple = ("density", "velocity_x", "velocity_y", "pressure"),
             config: dict = None
     ):
@@ -90,6 +90,7 @@ class AlpacaEnv(gym.Env, ABC):
         self.evaluation = False
         self.iteration = None
         self.cumulative_reward = 0
+        self.verbose = True
 
     def _build_objective(
             self,
@@ -153,7 +154,8 @@ class AlpacaEnv(gym.Env, ABC):
         self.debug.action_trajectory = []
         os.system(f"rm -rf runtime_data/{self.obj.inputfile}_*")
 
-    def reset(self, print_info=False, evaluate=False, iteration=-1):
+    def reset(self, verbose=True, evaluate=False, iteration=-1):
+        self.verbose = verbose
         self.evaluation = evaluate
         self._reset_flags_and_buffers()
         self.obj.time_controller.counter = 0
@@ -168,21 +170,27 @@ class AlpacaEnv(gym.Env, ABC):
         self.obj.scheme_writer.configure_scheme_xml(action)
         end_time = self.obj.time_controller.get_end_time_string()
         inputfile = self.obj.configure_inputfile(end_time=end_time)
-        self.obj.run(inputfile=inputfile)
+        self.obj.run(inputfile=inputfile, evaluation=self.evaluation)
         current_state = self.obj.get_state(end_time=end_time)
+        if self.inputfile == "doublemach_32" and (np.any(current_state[0] > 25) or np.any(current_state[3] > 600)):
+            # raise Exception("Simulation crashed!")
+            self.obj.is_crashed = True
+            self.obj.done = True
         reward = self.get_reward(end_time=end_time)
         infos = self.get_infos(end_time=end_time)
 
         if end_time == self.obj.time_controller.get_time_span_string():
             self.obj.done = True
         if self.evaluation:
+        # if self.obj.is_crashed:
             self.debug.collect_scheme_paras()
-            if PRINT_VERBOSE:
+            if self.verbose:
                 self.debug.flush_info()
         return current_state, reward, self.obj.done, infos
 
-    def compute_reward(self, end_time, coef_dict, bias=0.01, scale=1):
+    def compute_reward(self, end_time, coef_dict, bias=0.0, scale=1):
         if self.obj.is_crashed:
+            # self.cumulative_reward += -50
             return -50
         else:
             # compute the kinetic energy improvement
@@ -202,8 +210,8 @@ class AlpacaEnv(gym.Env, ABC):
                 self.debug.collect_info(f"{self.obj.time_controller.get_restart_time_string(end_time, decimal=3)} -> ")
                 self.debug.collect_info(f"{end_time}: ")
                 self.debug.collect_info(f"disper: {round(reward_si, 3):<6} ")
-                self.debug.collect_info(f"disper_penalty: {round(si_penalty, 3):<5} ")
                 self.debug.collect_info(f"coef: {round(coef_dict[end_time], 3):<5} ")
+                self.debug.collect_info(f"disper_penalty: {round(si_penalty, 3):<5} ")
                 self.debug.collect_info(f"ke_reward: {round(reward_ke, 3):<6} ")
                 self.debug.collect_info(f"reward: {round(total_reward, 3):<6} ")
             return total_reward
@@ -224,6 +232,7 @@ class AlpacaEnv(gym.Env, ABC):
         info += f"\tTimespan: (0, {self.obj.time_controller.get_time_span_string()}); " \
                 f"Timestep size: {self.obj.time_controller.get_timestep_size()}\n"
         info += f"\tLayers: {self.obj.layers}\n"
+        info += f"\tParameters: {self.obj.scheme_writer.scheme_parameters}\n"
         info += f"\tBaseline data: {self.obj.baseline_data_obj.state_data_loc}\n"
         info += "\n"
         info += f"\tExecutable: {self.obj.solver.executable}\n"

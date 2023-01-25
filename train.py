@@ -6,9 +6,9 @@ parser.add_argument("-case_name", type=str, required=True, help="type a test cas
 # workstation, desktop
 parser.add_argument("-computer", type=str, required=True, help="type which computer is used: workstation, desktop")
 parser.add_argument("-seed", type=int, required=True, help="type an integer random seed")
-parser.add_argument("-buffer_length", type=int, default=1024, help="type a buffer length")
-parser.add_argument("-batch_length", type=int, default=64, help="type a batch length")
-parser.add_argument("-iteration", type=int, default=400, help="type a number of iteration")
+parser.add_argument("-buffer_length", type=int, default=2048, help="type a buffer length")
+parser.add_argument("-batch_length", type=int, default=128, help="type a batch length")
+parser.add_argument("-iteration", type=int, default=200, help="type a number of iteration")
 
 args = parser.parse_args()
 print(args)
