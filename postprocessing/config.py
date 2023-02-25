@@ -68,21 +68,21 @@ def data_path(name: str, time: str):
     elif name.lower() == "shear_thin":
         return { 
             64: [
-                f"/media/yiqi/Elements/RL/baseline/shear_thin_64_weno5/domain/data_{time}*.h5",
-                f"/media/yiqi/Elements/RL/baseline/shear_thin_64_teno5/domain/data_{time}*.h5",
-                f"/media/yiqi/Elements/RL/baseline/shear_thin_64_teno5lin/domain/data_{time}*.h5",
+                f"/media/yiqi/Elements/RL/baseline/shear_thin/shear_thin_64_weno5/domain/data_{time}*.h5",
+                f"/media/yiqi/Elements/RL/baseline/shear_thin/shear_thin_64_teno5/domain/data_{time}*.h5",
+                f"/media/yiqi/Elements/RL/baseline/shear_thin/shear_thin_64_teno5lin/domain/data_{time}*.h5",
                 f"/media/yiqi/Elements/RL/August/shear_thin/FreeShearThinEnv/runtime_data/shear_thin_64_{time}/domain/data_{time}000.h5",
             ],
-            128: [
-                f"/media/yiqi/Elements/RL/baseline/shear_thin_128_weno5/domain/data_{time}*.h5",
-                f"/media/yiqi/Elements/RL/baseline/shear_thin_128_teno5/domain/data_{time}*.h5",
-                f"/media/yiqi/Elements/RL/baseline/shear_thin_128_teno5lin/domain/data_{time}*.h5",
-                f"/media/yiqi/Elements/RL/August/shear_thin/FreeShearThinHighRes128Env/runtime_data/shear_thin_128_{time}/domain/data_{time}000.h5",
+            192: [
+                f"/media/yiqi/Elements/RL/baseline/shear_thin/shear_thin_192_weno5/domain/data_{time}*.h5",
+                f"/media/yiqi/Elements/RL/baseline/shear_thin/shear_thin_192_teno5/domain/data_{time}*.h5",
+                f"/media/yiqi/Elements/RL/baseline/shear_thin/shear_thin_192_teno5lin/domain/data_{time}*.h5",
+                f"/media/yiqi/Elements/RL/August/shear_thin/FreeShearThinHighRes192Env/runtime_data/shear_thin_192_{time}/domain/data_{time}000.h5",
             ],
             256: [
-                f"/media/yiqi/Elements/RL/baseline/shear_thin_256_weno5/domain/data_{time}*.h5",
-                f"/media/yiqi/Elements/RL/baseline/shear_thin_256_teno5/domain/data_{time}*.h5",
-                f"/media/yiqi/Elements/RL/baseline/shear_thin_256_teno5lin/domain/data_{time}*.h5",
+                f"/media/yiqi/Elements/RL/baseline/shear_thin/shear_thin_256_weno5/domain/data_{time}*.h5",
+                f"/media/yiqi/Elements/RL/baseline/shear_thin/shear_thin_256_teno5/domain/data_{time}*.h5",
+                f"/media/yiqi/Elements/RL/baseline/shear_thin/shear_thin_256_teno5lin/domain/data_{time}*.h5",
                 f"/media/yiqi/Elements/RL/August/shear_thin/FreeShearThinHighRes256Env/runtime_data/shear_thin_256_{time}/domain/data_{time}000.h5",
             ]
         }
@@ -205,7 +205,7 @@ def envs_name(name: str):
     elif name.lower() == "shear_thin":
         return {
             64: "FreeShearThinEnv", 
-            128: "FreeShearThinHighRes128Env", 
+            192: "FreeShearThinHighRes192Env", 
             256: "FreeShearThinHighRes256Env",
         }
     elif name.lower() == "doublemach":
@@ -213,6 +213,7 @@ def envs_name(name: str):
             32: "DoubleMachReflectionEnv", 
             # 64: "MovingGreshoHighRes64Env", 
             # 128: "MovingGreshoHighRes128Env",
+            160: "DoubleMachReflectionHighRes160Env"
         }
     else:
         raise "No such configuration!"
@@ -297,7 +298,7 @@ def shape_config(name: str):
     elif name.lower() == "shear_thin":
         return {
             64: (64, 64), 
-            128: (128, 128), 
+            192: (192, 192), 
             256: (256, 256)
         }
     elif name.lower() == "viscous_shock":
@@ -320,6 +321,7 @@ def shape_config(name: str):
             # 64: (64, 256), 
             # 128: (128, 512),
             # 512: (256, 512)
+            160: (640, 640)
         }
     else:
         raise "No such configuration!"

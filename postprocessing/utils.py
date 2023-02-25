@@ -10,6 +10,9 @@ import pandas as pd
 from ..envs.utils import get_scale_coefs
 from ..envs.env_base import AlpacaEnv
 
+plt.rc("font", family="Times New Roman")
+plt.rcParams["mathtext.fontset"] = "stix"
+
 
 def log(text: str, file: str):
     text += "\n"
@@ -108,6 +111,8 @@ def _plot_field(
             cmap=config.get("cmap", "viridis"),
             alpha=config.get("alpha", 1.0)
         )
+        if config.get("colorbar", False):
+            plt.colorbar()
     if "contour" in types:
         # print("levels:", config.get("levels", 10))
         plt.contour(
@@ -119,8 +124,8 @@ def _plot_field(
             levels=config.get("levels", 10), 
             alpha=config.get("contour_alpha", 1)
         )
-    plt.xticks(config.get("xticks", [0, 0.5, 1]))
-    plt.yticks(config.get("yticks", [0, 0.5, 1]))
+    plt.xticks(config.get("xticks", [0, 0.5, 1]), fontsize=12)
+    plt.yticks(config.get("yticks", [0, 0.5, 1]), fontsize=12)
     
 
 
@@ -192,18 +197,24 @@ def plot_separate_test_results(
         _plot_field(data_file, state, types, config, shape=shape[cells])
         # except:
             # pass
-        plt.title(schemes[(i-1) % 4], fontsize=10)
+        plt.title(schemes[(i-1) % 4], fontsize=16)
         i += 1
     plt.tight_layout()
     if path is not None:
         plt.savefig(path, dpi=400)
 
-def dispersion_to_baseline(base: Simulation2D, sim: Simulation2D):
+def dispersion_to_baseline(base: Simulation2D, sim: Simulation2D, subdomain: list):
     """
     computer anti-diffusion increase to baseline
     """
-    base_trunc = base.result["highorder_dissipation_rate"]
-    sim_eff = sim.result["effective_dissipation_rate"]
+    if subdomain is not None:
+        row = slice(None, subdomain[0])
+        col = slice(None, subdomain[1])
+        base_trunc = base.result["highorder_dissipation_rate"][row, col]
+        sim_eff = sim.result["effective_dissipation_rate"][row, col]
+    else:
+        base_trunc = base.result["highorder_dissipation_rate"]
+        sim_eff = sim.result["effective_dissipation_rate"]
     trunc = base_trunc - sim_eff
     return np.where(trunc < 0, trunc, 0).sum()
 
@@ -212,8 +223,11 @@ def compute_improvement(
     name: str,
     cells: int,
     test_schemes: list = ["teno5", "teno5lin", "teno5rl"],
+    subdomain: list = None
 ):
-
+    
+    if name == "doublemach" and subdomain is None:
+        raise Exception("Double mach reflection should have a subdomain!")
     baseline = "weno5"
     envs_names = envs_name(name)
     end_time, timestep_size = time_config(name)["end_time"], time_config(name)["timestep_size"]
@@ -228,15 +242,25 @@ def compute_improvement(
             clear_output(wait=True)
             time = format(t, ".3f")
             base = Simulation2D(f"/media/yiqi/Elements/RL/{baseline_folder}/{name}/{name}_{cells}_{baseline}/domain/data_{time}*.h5", shape=shape)
-            ke_base = base.result["kinetic_energy"].sum()
-            dissip_base, disper_base, sum_base, _ = base.truncation_errors()
+            if subdomain is not None:
+                row = slice(None, subdomain[0])
+                col = slice(None, subdomain[1])
+                ke_base = base.result["kinetic_energy"][row, col].sum()
+            else:
+                ke_base = base.result["kinetic_energy"].sum()
+            dissip_base, disper_base, sum_base, _ = base.truncation_errors(subdomain=subdomain)
             if scheme != "teno5rl":
                 test = Simulation2D(f"/media/yiqi/Elements/RL/{baseline_folder}/{name}/{name}_{cells}_{scheme}/domain/data_{time}*.h5", shape=shape)
             else:
                 test = Simulation2D(f"/media/yiqi/Elements/RL/August/{name}/{envs_names[cells]}/runtime_data/{name}_{cells}_{time}/domain/data_{time}*.h5", shape=shape)
-            ke_test = test.result["kinetic_energy"].sum()
+            if subdomain is not None:
+                row = slice(None, subdomain[0])
+                col = slice(None, subdomain[1])
+                ke_test = test.result["kinetic_energy"][row, col].sum()
+            else:
+                ke_test = test.result["kinetic_energy"].sum()
             ke_reward = ke_test / ke_base - 1
-            disper_test = dispersion_to_baseline(base, test)
+            disper_test = dispersion_to_baseline(base, test, subdomain)
             disper_imp = disper_test / disper_base - 1
             row = [float(time), ke_base, ke_test, ke_reward, disper_base, disper_test, disper_imp]
             results.append(row)
@@ -252,6 +276,7 @@ def compute_improvement(
         ])
         results.to_csv(f"/media/yiqi/Elements/RL/August/{name}/{envs_names[cells]}/{scheme}_to_{baseline}_info.csv", index=False)
 
+from scipy.signal import savgol_filter
 def plot_improvement(
     name: str,
     cells: int
@@ -263,24 +288,68 @@ def plot_improvement(
     teno5lin_to_weno5 = pd.read_csv(f"/media/yiqi/Elements/RL/August/{name}/{envs_names[cells]}/teno5lin_to_{baseline}_info.csv")
     teno5rl_to_weno5 = pd.read_csv(f"/media/yiqi/Elements/RL/August/{name}/{envs_names[cells]}/teno5rl_to_{baseline}_info.csv")
 
-    df = pd.concat([teno5_to_weno5["t"], teno5_to_weno5["ke_reward"]*100, teno5lin_to_weno5["ke_reward"]*100, teno5rl_to_weno5["ke_reward"]*100], axis=1)
-    df.columns = ["t", "TENO5", "TENO5SP", "TENO5RL"]
-    ax = df.plot(x="t", xlim=(0, time_config(name)["end_time"]), figsize=(5, 4), grid=True)
-    ax.set_title(r"KE Increse, $" + str(cells) + r"\times " + str(cells) + r"$")
-    ax.set_xlabel(r"$t$")
-    ax.set_ylabel(r"$\%$")
-    ax.legend(fontsize=12)
-    plt.tight_layout()
+    # df = pd.concat([teno5_to_weno5["t"], teno5_to_weno5["ke_reward"]*100, teno5lin_to_weno5["ke_reward"]*100, teno5rl_to_weno5["ke_reward"]*100], axis=1)
+    # df.columns = ["t", "TENO5", "TENO5SP", "TENO5RL"]
+    # ax = df.plot(x="t", xlim=(0, time_config(name)["end_time"]), figsize=(5, 4), grid=True)
+    # ax.set_title(r"KE Increse, $" + str(cells) + r"\times " + str(cells) + r"$")
+    # ax.set_xlabel(r"$t$")
+    # ax.set_ylabel(r"$\%$")
+    # ax.legend(fontsize=12)
+    # plt.tight_layout()
+    w = 5
+    window_length = 21
+    p_order = 2
+    timestep = teno5_to_weno5["t"].to_numpy()
+    teno5 = teno5_to_weno5["ke_reward"].to_numpy() * 100
+    teno5lin = teno5lin_to_weno5["ke_reward"].to_numpy() * 100
+    teno5rl = teno5rl_to_weno5["ke_reward"].to_numpy() * 100
+    # teno5_m = np.convolve(teno5, np.ones(w), mode="same") / w
+    teno5_sav = savgol_filter(teno5, window_length, p_order)
+    teno5lin_sav = savgol_filter(teno5lin, window_length, p_order)
+    teno5rl_sav = savgol_filter(teno5rl, window_length, p_order)
+    # plt.plot(teno5)
+    # plt.plot(teno5_m)
+    plt.figure(dpi=100)
+    plt.plot(timestep, teno5, color="black", linestyle="-", alpha=0.2, linewidth=0.5)
+    plt.plot(timestep, teno5lin, color="red", linestyle="--", alpha=0.2, linewidth=0.5)
+    plt.plot(timestep, teno5rl, color="blue", linestyle="-.", alpha=0.2, linewidth=0.5)
+    plt.plot(timestep, teno5_sav, linestyle="-", color="black", linewidth=0.8)
+    plt.plot(timestep, teno5lin_sav, linestyle="--", color="red", linewidth=0.8)
+    plt.plot(timestep, teno5rl_sav, linestyle="-.", color="blue", linewidth=0.8)
+    plt.show()
     # plt.savefig(f"{envs_name[cells]}_KE.jpg", dpi=400)
 
-    df = pd.concat([teno5_to_weno5["t"], teno5_to_weno5["disper_imp"]*100, teno5lin_to_weno5["disper_imp"]*100, teno5rl_to_weno5["disper_imp"]*100], axis=1)
-    df.columns = ["t", "TENO5", "TENO5SP", "TENO5RL"]
-    ax = df.plot(x="t", xlim=(0, time_config(name)["end_time"]), figsize=(5, 4), fontsize=12, grid=True)
-    ax.set_title(r"Anti-Diffusion Increse, $" + str(cells) + r"\times " + str(cells) + r"$", fontsize=16)
-    ax.set_xlabel(r"$t$", fontsize=12)
-    ax.set_ylabel(r"$\%$", fontsize=12)
-    ax.legend(fontsize=12)
-    plt.tight_layout()
+    # df = pd.concat([teno5_to_weno5["t"], teno5_to_weno5["disper_imp"]*100, teno5lin_to_weno5["disper_imp"]*100, teno5rl_to_weno5["disper_imp"]*100], axis=1)
+    # df.columns = ["t", "TENO5", "TENO5SP", "TENO5RL"]
+    # ax = df.plot(x="t", xlim=(0, time_config(name)["end_time"]), figsize=(5, 4), fontsize=12, grid=True)
+    # ax.set_title(r"Anti-Diffusion Increse, $" + str(cells) + r"\times " + str(cells) + r"$", fontsize=16)
+    # ax.set_xlabel(r"$t$", fontsize=12)
+    # ax.set_ylabel(r"$\%$", fontsize=12)
+    # ax.legend(fontsize=12)
+    # plt.tight_layout()
+
+    w = 5
+    window_length = 21
+    p_order = 2
+    timestep = teno5_to_weno5["t"].to_numpy()
+    teno5 = teno5_to_weno5["disper_imp"].to_numpy() * 100
+    teno5lin = teno5lin_to_weno5["disper_imp"].to_numpy() * 100
+    teno5rl = teno5rl_to_weno5["disper_imp"].to_numpy() * 100
+    # teno5_m = np.convolve(teno5, np.ones(w), mode="same") / w
+    teno5_sav = savgol_filter(teno5, window_length, p_order)
+    teno5lin_sav = savgol_filter(teno5lin, window_length, p_order)
+    teno5rl_sav = savgol_filter(teno5rl, window_length, p_order)
+    # plt.plot(teno5)
+    # plt.plot(teno5_m)
+    plt.figure(dpi=100)
+    plt.plot(timestep, teno5, color="black", linestyle="-", alpha=0.2, linewidth=0.5)
+    plt.plot(timestep, teno5lin, color="red", linestyle="--", alpha=0.2, linewidth=0.5)
+    plt.plot(timestep, teno5rl, color="blue", linestyle="-.", alpha=0.2, linewidth=0.5)
+    plt.plot(timestep, teno5_sav, linestyle="-", color="black", linewidth=0.8)
+    plt.plot(timestep, teno5lin_sav, linestyle="--", color="red", linewidth=0.8)
+    plt.plot(timestep, teno5rl_sav, linestyle="-.", color="blue", linewidth=0.8)
+    # plt.plot(teno5lin_s)
+    # plt.plot(teno5rl_s)
     # plt.savefig(f"{envs_name[cells]}_AntiDiffusion.jpg", dpi=400)
 
 
@@ -370,7 +439,7 @@ def test_deterministic_reward(
     """
     model = PPO.load(model_path, env=env, device="cuda")
     dones = False
-    obs = env.reset(evaluate=True)
+    obs = env.reset(evaluate=True, verbose=False)
     
     while not dones:
         action, _states = model.predict(obs, deterministic=True)
